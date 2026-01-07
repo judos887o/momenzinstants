@@ -6,62 +6,79 @@ local CoreGui=game:GetService("CoreGui")
 local Workspace=game:GetService("Workspace")
 
 local LocalPlayer=Players.LocalPlayer
-local MAINEVENT=ReplicatedStorage:WaitForChild("MAINEVENT")
+local MAINEVENT=ReplicatedStorage:FindFirstChild("MAINEVENT") or ReplicatedStorage:WaitForChild("MAINEVENT",5)
 
 local Shared=getgenv().SchmecktHubPC or {}
 getgenv().SchmecktHubPC=Shared
 Shared.Connections=Shared.Connections or {}
+Shared.StompRadius=math.clamp(Shared.StompRadius or 50,0,50)
+Shared.StompNearestEnabled=(Shared.StompNearestEnabled==true)
+Shared.InstantStompPanelPos=Shared.InstantStompPanelPos or UDim2.new(0,40,0,40)
+
+local KEY_CORE="InstantStompCore"
+local KEY_UI="InstantStompUI"
+
 local function DisconnectKey(k)
-    if Shared.Connections[k] then for _,c in ipairs(Shared.Connections[k]) do pcall(function() c:Disconnect() end) end end
+    if Shared.Connections[k] then
+        for _,c in ipairs(Shared.Connections[k]) do pcall(function() c:Disconnect() end) end
+    end
     Shared.Connections[k]={}
 end
 
-local KEY_MAIN="AutoStomp"
-local KEY_UI="StompNearestUI"
-DisconnectKey(KEY_MAIN)
+DisconnectKey(KEY_CORE)
 DisconnectKey(KEY_UI)
+local oldUI=(CoreGui:FindFirstChild("Schmeckt_InstantStomp_UI") or (LocalPlayer:FindFirstChildOfClass("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("Schmeckt_InstantStomp_UI")))
+if oldUI then oldUI:Destroy() end
+local oldRing=Workspace:FindFirstChild("Schmeckt_InstantStomp_Ring")
+if oldRing then oldRing:Destroy() end
 
-Shared.StompNearestEnabled = (Shared.StompNearestEnabled ~= false)
-Shared.StompBtnPos = Shared.StompBtnPos or UDim2.new(1,-190,0,20)
-Shared.StompRadius = math.clamp(Shared.StompRadius or 50,0,50)
+local function safeParentScreenGui(gui)
+    local ok=false
+    if syn and syn.protect_gui then pcall(function() syn.protect_gui(gui); gui.Parent=CoreGui; ok=true end) end
+    if not ok then ok=pcall(function() gui.Parent=CoreGui end) end
+    if not ok then
+        local pg=LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui",3)
+        if pg then gui.Parent=pg else gui.Parent=CoreGui end
+    end
+end
 
 local ANIMATION_ID="127290980842135"
 local TOUCH_RANGE=15
 local ANIM_SPEED=100
 local MIN_COOLDOWN=0.05
-
-local validBodyParts={["Head"]=true,["HumanoidRootPart"]=true,["Torso"]=true,["Left Leg"]=true,["Right Leg"]=true,["Left Arm"]=true,["Right Arm"]=true,["UpperTorso"]=true,["LowerTorso"]=true,["LeftUpperArm"]=true,["LeftLowerArm"]=true,["RightUpperArm"]=true,["RightLowerArm"]=true,["LeftHand"]=true,["RightHand"]=true,["LeftUpperLeg"]=true,["LeftLowerLeg"]=true,["RightUpperLeg"]=true,["RightLowerLeg"]=true,["LeftFoot"]=true,["RightFoot"]=true}
-local legParts={["LeftFoot"]=true,["RightFoot"]=true,["LeftLowerLeg"]=true,["RightLowerLeg"]=true,["LeftUpperLeg"]=true,["RightUpperLeg"]=true,["LeftLeg"]=true,["RightLeg"]=true}
-
 local lastStomp=0
-Shared.__stompWorking=false
+
+local validBodyParts={
+    ["Head"]=true,["HumanoidRootPart"]=true,["Torso"]=true,["Left Leg"]=true,["Right Leg"]=true,["Left Arm"]=true,["Right Arm"]=true,
+    ["UpperTorso"]=true,["LowerTorso"]=true,["LeftUpperArm"]=true,["LeftLowerArm"]=true,["RightUpperArm"]=true,["RightLowerArm"]=true,
+    ["LeftHand"]=true,["RightHand"]=true,["LeftUpperLeg"]=true,["LeftLowerLeg"]=true,["RightUpperLeg"]=true,["RightLowerLeg"]=true,
+    ["LeftFoot"]=true,["RightFoot"]=true
+}
+local legParts={
+    ["LeftFoot"]=true,["RightFoot"]=true,["LeftLowerLeg"]=true,["RightLowerLeg"]=true,["LeftUpperLeg"]=true,["RightUpperLeg"]=true,["LeftLeg"]=true,["RightLeg"]=true
+}
 
 local function isDowned(p)
-    local ch=p.Character
-    if not ch then return false end
-    local body=ch:FindFirstChild("BodyEffects")
-    local ko=body and (body:FindFirstChild("K.O") or body:FindFirstChild("KO"))
-    local dead=body and body:FindFirstChild("Dead")
-    if ko and ko.Value==true and not (dead and dead.Value==true) then return true end
-    local hum=ch:FindFirstChildOfClass("Humanoid")
-    if not hum then return false end
+    local ch=p and p.Character; if not ch then return false end
+    local be=ch:FindFirstChild("BodyEffects")
+    local KO=be and (be:FindFirstChild("K.O") or be:FindFirstChild("KO"))
+    local Dead=be and be:FindFirstChild("Dead")
+    if KO and KO.Value==true and not (Dead and Dead.Value==true) then return true end
+    local hum=ch:FindFirstChildOfClass("Humanoid"); if not hum then return false end
     local s=hum:GetState()
-    if s==Enum.HumanoidStateType.Ragdoll or s==Enum.HumanoidStateType.FallingDown or s==Enum.HumanoidStateType.Physics or hum.PlatformStand then return true end
+    if s==Enum.HumanoidStateType.Ragdoll or s==Enum.HumanoidStateType.FallingDown or s==Enum.HumanoidStateType.Physics or hum.PlatformStand then
+        return true
+    end
     return false
 end
 
 local function isInRange(p)
-    local myChar=LocalPlayer.Character
-    if not myChar then return false end
-    local myHRP=myChar:FindFirstChild("HumanoidRootPart")
-    if not myHRP then return false end
-    local ch=p.Character
-    if not ch then return false end
+    local myChar=LocalPlayer.Character; if not myChar then return false end
+    local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return false end
+    local ch=p.Character; if not ch then return false end
     for _,part in ipairs(ch:GetChildren()) do
         if part:IsA("BasePart") and validBodyParts[part.Name] then
-            if (myHRP.Position-part.Position).Magnitude<=TOUCH_RANGE then
-                return true
-            end
+            if (myHRP.Position-part.Position).Magnitude<=TOUCH_RANGE then return true end
         end
     end
     return false
@@ -79,10 +96,8 @@ local function nearestLegPart(ch,refPos)
 end
 
 local function getNearestDowned(maxDist)
-    local myChar=LocalPlayer.Character
-    if not myChar then return end
-    local myHRP=myChar:FindFirstChild("HumanoidRootPart")
-    if not myHRP then return end
+    local myChar=LocalPlayer.Character; if not myChar then return end
+    local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
     local bestPlr,bestPart,bestDist=nil,nil,math.huge
     for _,p in ipairs(Players:GetPlayers()) do
         if p~=LocalPlayer and isDowned(p) then
@@ -102,226 +117,255 @@ end
 
 local function hookAnimForCharacter(ch)
     task.spawn(function()
-        local hum=ch:WaitForChild("Humanoid",5)
-        if not hum then return end
-        local animator=hum:WaitForChild("Animator",5)
-        if not animator then return end
-        table.insert(Shared.Connections[KEY_MAIN],animator.AnimationPlayed:Connect(function(track)
-            if not Shared.AutoStomp then return end
+        local hum=ch:WaitForChild("Humanoid",5); if not hum then return end
+        local animator=hum:WaitForChild("Animator",5); if not animator then return end
+        table.insert(Shared.Connections[KEY_CORE], animator.AnimationPlayed:Connect(function(track)
             local id=track.Animation and track.Animation.AnimationId or ""
-            if tostring(id):find(ANIMATION_ID) then
-                track:AdjustSpeed(ANIM_SPEED)
-            end
+            if tostring(id):find(ANIMATION_ID) then track:AdjustSpeed(ANIM_SPEED) end
         end))
     end)
 end
 
-if LocalPlayer.Character then hookAnimForCharacter(LocalPlayer.Character) end
-table.insert(Shared.Connections[KEY_MAIN],LocalPlayer.CharacterAdded:Connect(hookAnimForCharacter))
-
-table.insert(Shared.Connections[KEY_MAIN],RunService.Heartbeat:Connect(function()
-    if not Shared.AutoStomp then return end
-    local now=tick()
-    if now-lastStomp<MIN_COOLDOWN then return end
+table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(function()
+    local now=tick(); if now-lastStomp<MIN_COOLDOWN then return end
+    local myChar=LocalPlayer.Character; if not myChar then return end
+    local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
     for _,p in ipairs(Players:GetPlayers()) do
         if p~=LocalPlayer and isDowned(p) and isInRange(p) then
-            MAINEVENT:FireServer("STOMP")
+            if MAINEVENT then MAINEVENT:FireServer("STOMP") end
             lastStomp=now
             return
         end
     end
 end))
 
-local function attachAndStomp(plr,leg)
-    if Shared.__stompWorking then return end
-    Shared.__stompWorking=true
-    while Shared.StompNearestEnabled and isDowned(plr) do
-        local myChar=LocalPlayer.Character
-        if not myChar then break end
-        local myHRP=myChar:FindFirstChild("HumanoidRootPart")
-        local ch=plr.Character
-        if not myHRP or not ch then break end
-        if not leg or not leg.Parent then
-            leg=nearestLegPart(ch,myHRP.Position)
-            if not leg then break end
+table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(function()
+    if not Shared.StompNearestEnabled then return end
+    local myChar=LocalPlayer.Character; if not myChar then return end
+    local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
+    local target,leg=getNearestDowned(Shared.StompRadius)
+    if target and leg then
+        local thrp=target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+        if thrp then
+            local desired=leg.Position+Vector3.new(0,1.05,0.2)
+            myHRP.CFrame=CFrame.new(desired,thrp.Position)
         end
-        local thrp=ch:FindFirstChild("HumanoidRootPart")
-        if not thrp then break end
-        local dist=(myHRP.Position-leg.Position).Magnitude
-        if dist>Shared.StompRadius then break end
-        local desiredPos=leg.Position+Vector3.new(0,1.05,0.2)
-        myHRP.CFrame=CFrame.new(desiredPos,thrp.Position)
-        if Shared.AutoStomp and isInRange(plr) and tick()-lastStomp>=MIN_COOLDOWN then
-            MAINEVENT:FireServer("STOMP")
-            lastStomp=tick()
-            break
-        end
-        RunService.Heartbeat:Wait()
     end
-    Shared.__stompWorking=false
-end
+end))
 
-local function safeParentScreenGui(gui)
-    local ok=false
-    if syn and syn.protect_gui then pcall(function() syn.protect_gui(gui); gui.Parent=CoreGui; ok=true end) end
-    if not ok then ok=pcall(function() gui.Parent=CoreGui end) end
-    if not ok then local pg=LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui",3); if pg then gui.Parent=pg else gui.Parent=CoreGui end end
-end
-
-local oldUI=(CoreGui:FindFirstChild("Schmeckt_StompNearest_UI") or (LocalPlayer:FindFirstChildOfClass("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("Schmeckt_StompNearest_UI")))
-if oldUI then oldUI:Destroy() end
+if LocalPlayer.Character then hookAnimForCharacter(LocalPlayer.Character) end
+table.insert(Shared.Connections[KEY_CORE], LocalPlayer.CharacterAdded:Connect(hookAnimForCharacter))
 
 local gui=Instance.new("ScreenGui")
-gui.Name="Schmeckt_StompNearest_UI"
+gui.Name="Schmeckt_InstantStomp_UI"
 gui.IgnoreGuiInset=true
 gui.ResetOnSpawn=false
 gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
 safeParentScreenGui(gui)
 
-local btn=Instance.new("TextButton")
-btn.Name="StompNearestBtn"
-btn.AnchorPoint=Vector2.new(1,0)
-btn.Position=Shared.StompBtnPos
-btn.Size=UDim2.new(0,200,0,38)
-btn.BackgroundColor3=Color3.fromRGB(140,0,0)
-btn.TextColor3=Color3.fromRGB(255,255,255)
-btn.Font=Enum.Font.GothamBold
-btn.TextSize=14
-btn.Text=""
-btn.AutoButtonColor=false
-btn.Parent=gui
-local cornerB=Instance.new("UICorner",btn) cornerB.CornerRadius=UDim.new(0,12)
-local strokeB=Instance.new("UIStroke",btn) strokeB.Thickness=1 strokeB.Transparency=0.15 strokeB.Color=Color3.fromRGB(255,150,150)
-local grad=Instance.new("UIGradient",btn)
-
-local function setUI(active)
-    if active then
-        grad.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(185,0,0)),ColorSequenceKeypoint.new(1,Color3.fromRGB(140,0,0))})
-        btn.Text="Stomp nearest: ON"
-    else
-        grad.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(140,0,0)),ColorSequenceKeypoint.new(1,Color3.fromRGB(90,0,0))})
-        btn.Text="Stomp nearest: OFF"
+local panel=Instance.new("Frame")
+panel.Name="Panel"
+panel.AnchorPoint=Vector2.new(0,0)
+do
+    local pos=Shared.InstantStompPanelPos
+    if pos.X.Scale~=0 or pos.Y.Scale~=0 then
+        local cam=Workspace.CurrentCamera
+        if cam then
+            local px=pos.X.Scale*cam.ViewportSize.X+pos.X.Offset
+            local py=pos.Y.Scale*cam.ViewportSize.Y+pos.Y.Offset
+            pos=UDim2.new(0,math.floor(px),0,math.floor(py))
+            Shared.InstantStompPanelPos=pos
+        end
     end
+    panel.Position=pos
 end
-setUI(Shared.StompNearestEnabled)
+panel.Size=UDim2.new(0,300,0,138)
+panel.BackgroundColor3=Color3.fromRGB(120,0,0)
+panel.Parent=gui
+local pCorner=Instance.new("UICorner",panel) pCorner.CornerRadius=UDim.new(0,12)
+local pStroke=Instance.new("UIStroke",panel) pStroke.Thickness=1 pStroke.Transparency=0.15 pStroke.Color=Color3.fromRGB(255,150,150)
 
-local radiusPanel=Instance.new("Frame")
-radiusPanel.Name="RadiusPanel"
-radiusPanel.AnchorPoint=Vector2.new(1,0)
-radiusPanel.Position=UDim2.new(btn.Position.X.Scale,btn.Position.X.Offset,btn.Position.Y.Scale,btn.Position.Y.Offset+44)
-radiusPanel.Size=UDim2.new(0,200,0,54)
-radiusPanel.BackgroundColor3=Color3.fromRGB(120,0,0)
-radiusPanel.Parent=gui
-local cornerP=Instance.new("UICorner",radiusPanel) cornerP.CornerRadius=UDim.new(0,12)
-local strokeP=Instance.new("UIStroke",radiusPanel) strokeP.Thickness=1 strokeP.Transparency=0.15 strokeP.Color=Color3.fromRGB(255,150,150)
-local gradP=Instance.new("UIGradient",radiusPanel)
-gradP.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(150,0,0)),ColorSequenceKeypoint.new(1,Color3.fromRGB(110,0,0))})
+local dragBar=Instance.new("Frame")
+dragBar.BackgroundColor3=Color3.fromRGB(140,0,0)
+dragBar.Position=UDim2.new(0,0,0,0)
+dragBar.Size=UDim2.new(1,0,0,30)
+dragBar.Parent=panel
+local dCorner=Instance.new("UICorner",dragBar) dCorner.CornerRadius=UDim.new(0,12)
+local dStroke=Instance.new("UIStroke",dragBar) dStroke.Thickness=1 dStroke.Transparency=0.2 dStroke.Color=Color3.fromRGB(255,150,150)
 
-local lbl=Instance.new("TextLabel")
-lbl.BackgroundTransparency=1
-lbl.Size=UDim2.new(1,-16,0,18)
-lbl.Position=UDim2.new(0,8,0,6)
-lbl.Font=Enum.Font.GothamSemibold
-lbl.TextColor3=Color3.fromRGB(255,255,255)
-lbl.TextSize=13
-lbl.TextXAlignment=Enum.TextXAlignment.Left
-lbl.Parent=radiusPanel
+local title=Instance.new("TextLabel")
+title.BackgroundTransparency=1
+title.Position=UDim2.new(0,12,0,0)
+title.Size=UDim2.new(1,-24,1,0)
+title.Font=Enum.Font.GothamBold
+title.Text="Instant Stomp"
+title.TextColor3=Color3.new(1,1,1)
+title.TextSize=14
+title.TextXAlignment=Enum.TextXAlignment.Left
+title.Parent=dragBar
+
+local rowToggle=Instance.new("Frame")
+rowToggle.BackgroundTransparency=1
+rowToggle.Position=UDim2.new(0,12,0,36)
+rowToggle.Size=UDim2.new(1,-24,0,24)
+rowToggle.Parent=panel
+
+local lblT=Instance.new("TextLabel")
+lblT.BackgroundTransparency=1
+lblT.Position=UDim2.new(0,0,0,0)
+lblT.Size=UDim2.new(1,-100,1,0)
+lblT.Font=Enum.Font.GothamSemibold
+lblT.Text="Stomp Nearest"
+lblT.TextColor3=Color3.new(1,1,1)
+lblT.TextSize=12
+lblT.TextXAlignment=Enum.TextXAlignment.Left
+lblT.Parent=rowToggle
+
+local pill=Instance.new("TextButton")
+pill.AnchorPoint=Vector2.new(1,0.5)
+pill.Position=UDim2.new(1,0,0.5,0)
+pill.Size=UDim2.new(0,84,0,24)
+pill.Font=Enum.Font.GothamBold
+pill.TextSize=12
+pill.TextColor3=Color3.new(1,1,1)
+pill.AutoButtonColor=false
+pill.Parent=rowToggle
+local c=Instance.new("UICorner",pill) c.CornerRadius=UDim.new(0,999)
+local s=Instance.new("UIStroke",pill) s.Thickness=1 s.Transparency=0.25 s.Color=Color3.fromRGB(255,150,150)
+
+local function refreshPill()
+    pill.BackgroundColor3=Shared.StompNearestEnabled and Color3.fromRGB(0,180,80) or Color3.fromRGB(175,50,120)
+    pill.Text=Shared.StompNearestEnabled and "ON" or "OFF"
+end
+refreshPill()
+pill.MouseButton1Click:Connect(function()
+    Shared.StompNearestEnabled=not Shared.StompNearestEnabled
+    refreshPill()
+    if Shared.SaveConfig then Shared.SaveConfig() end
+end)
+
+local sliderRow=Instance.new("Frame")
+sliderRow.BackgroundTransparency=1
+sliderRow.Position=UDim2.new(0,12,0,70)
+sliderRow.Size=UDim2.new(1,-24,0,56)
+sliderRow.Parent=panel
+
+local lblR=Instance.new("TextLabel")
+lblR.BackgroundTransparency=1
+lblR.Position=UDim2.new(0,0,0,0)
+lblR.Size=UDim2.new(0.26,0,1,0)
+lblR.Font=Enum.Font.GothamSemibold
+lblR.Text=("Radius: %d"):format(Shared.StompRadius)
+lblR.TextColor3=Color3.new(1,1,1)
+lblR.TextSize=12
+lblR.TextXAlignment=Enum.TextXAlignment.Left
+lblR.Parent=sliderRow
 
 local bar=Instance.new("Frame")
 bar.BackgroundColor3=Color3.fromRGB(90,0,0)
-bar.Size=UDim2.new(1,-16,0,8)
-bar.Position=UDim2.new(0,8,0,28)
-bar.Parent=radiusPanel
-local cornerBar=Instance.new("UICorner",bar) cornerBar.CornerRadius=UDim.new(0,6)
-local barStroke=Instance.new("UIStroke",bar) barStroke.Thickness=1 barStroke.Transparency=0.25 barStroke.Color=Color3.fromRGB(255,110,110)
+bar.Position=UDim2.new(0.28,12,0,18)
+bar.Size=UDim2.new(0.72,-24,0,16)
+bar.Parent=sliderRow
+local barC=Instance.new("UICorner",bar) barC.CornerRadius=UDim.new(0,8)
+local barS=Instance.new("UIStroke",bar) barS.Thickness=1 barS.Transparency=0.25 barS.Color=Color3.fromRGB(255,110,110)
+
+local hit=Instance.new("TextButton")
+hit.BackgroundTransparency=1
+hit.AutoButtonColor=false
+hit.Text=""
+hit.Position=UDim2.new(0,0,0,0)
+hit.Size=UDim2.new(1,0,1,0)
+hit.Parent=sliderRow
 
 local fill=Instance.new("Frame")
 fill.BackgroundColor3=Color3.fromRGB(185,0,0)
-fill.Size=UDim2.new(0,0,1,0)
-fill.Position=UDim2.new(0,0,0,0)
+fill.Size=UDim2.new((Shared.StompRadius/50),0,1,0)
 fill.Parent=bar
-local cornerFill=Instance.new("UICorner",fill) cornerFill.CornerRadius=UDim.new(0,6)
-local fillGrad=Instance.new("UIGradient",fill) fillGrad.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(185,0,0)),ColorSequenceKeypoint.new(1,Color3.fromRGB(140,0,0))})
+local fillC=Instance.new("UICorner",fill) fillC.CornerRadius=UDim.new(0,8)
 
 local thumb=Instance.new("Frame")
-thumb.Size=UDim2.new(0,12,0,12)
+thumb.Size=UDim2.new(0,20,0,20)
 thumb.BackgroundColor3=Color3.fromRGB(255,150,150)
+thumb.Position=UDim2.new(Shared.StompRadius/50,-10,0.5,-10)
 thumb.Parent=bar
-local cornerThumb=Instance.new("UICorner",thumb) cornerThumb.CornerRadius=UDim.new(1,0)
-local thumbStroke=Instance.new("UIStroke",thumb) thumbStroke.Thickness=1 thumbStroke.Transparency=0.2 thumbStroke.Color=Color3.fromRGB(255,220,220)
-
-btn.MouseButton1Click:Connect(function()
-    Shared.StompNearestEnabled=not Shared.StompNearestEnabled
-    setUI(Shared.StompNearestEnabled)
-end)
+local thC=Instance.new("UICorner",thumb) thC.CornerRadius=UDim.new(1,0)
+local thS=Instance.new("UIStroke",thumb) thS.Thickness=1 thS.Transparency=0.2 thS.Color=Color3.fromRGB(255,220,220)
 
 local sliding=false
 local function setRadius(val)
     Shared.StompRadius=math.clamp(math.floor(val+0.5),0,50)
-    lbl.Text=("Radius: %d studs"):format(Shared.StompRadius)
-    local w=bar.AbsoluteSize.X
-    local ratio=(w>0) and (Shared.StompRadius/50) or 0
-    fill.Size=UDim2.new(ratio,0,1,0)
-    local x=math.floor(ratio*w)
-    thumb.Position=UDim2.new(0,x-6,0.5,-6)
+    lblR.Text=("Radius: %d"):format(Shared.StompRadius)
+    local r=(Shared.StompRadius/50)
+    fill.Size=UDim2.new(r,0,1,0)
+    thumb.Position=UDim2.new(r,-10,0.5,-10)
+    if Shared.SaveConfig then Shared.SaveConfig() end
 end
-setRadius(Shared.StompRadius)
-
-local function posToRadius(x)
+local function posToRad(x)
     local bx=bar.AbsolutePosition.X
     local w=bar.AbsoluteSize.X
-    local r=(w>0) and math.clamp((x-bx)/w,0,1) or 0
-    setRadius(r*50)
+    local u=(w>0) and math.clamp((x-bx)/w,0,1) or 0
+    setRadius(u*50)
 end
 
-bar.InputBegan:Connect(function(input)
-    if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
-        sliding=true
-        posToRadius(input.Position.X)
+local function beginSlide(x)
+    sliding=true
+    posToRad(x)
+end
+local function endSlide()
+    sliding=false
+end
+
+hit.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+        beginSlide(i.Position.X)
     end
 end)
-bar.InputEnded:Connect(function(input)
-    if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
-        sliding=false
+bar.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+        beginSlide(i.Position.X)
     end
 end)
-UserInputService.InputChanged:Connect(function(input)
+thumb.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+        beginSlide(i.Position.X)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(i)
     if not sliding then return end
-    if input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch then
-        posToRadius(input.Position.X)
+    if i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch then
+        posToRad(i.Position.X)
+    end
+end)
+UserInputService.InputEnded:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
+        endSlide()
     end
 end)
 
-do
-    local dragging=false
-    local dragStart,startPos
-    btn.InputBegan:Connect(function(input)
-        if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
-            dragging=true
-            dragStart=input.Position
-            startPos=btn.Position
-            input.Changed:Connect(function() if input.UserInputState==Enum.UserInputState.End then dragging=false end end)
-        end
-    end)
-    UserInputService.InputChanged:Connect(function(input)
-        if not dragging then return end
-        local delta=input.Position-dragStart
-        btn.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+delta.X,startPos.Y.Scale,startPos.Y.Offset+delta.Y)
-        radiusPanel.Position=UDim2.new(btn.Position.X.Scale,btn.Position.X.Offset,btn.Position.Y.Scale,btn.Position.Y.Offset+44)
-        Shared.StompBtnPos=btn.Position
-    end)
-    btn:GetPropertyChangedSignal("Position"):Connect(function()
-        radiusPanel.Position=UDim2.new(btn.Position.X.Scale,btn.Position.X.Offset,btn.Position.Y.Scale,btn.Position.Y.Offset+44)
-    end)
-end
+local dragging=false
+local dragStart
+local startPos
+dragBar.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 then
+        dragging=true
+        dragStart=i.Position
+        startPos=panel.Position
+        i.Changed:Connect(function() if i.UserInputState==Enum.UserInputState.End then dragging=false end end)
+    end
+end)
+UserInputService.InputChanged:Connect(function(i)
+    if not dragging then return end
+    if i.UserInputType==Enum.UserInputType.MouseMovement then
+        local d=i.Position-dragStart
+        panel.Position=UDim2.new(0,startPos.X.Offset+d.X,0,startPos.Y.Offset+d.Y)
+        Shared.InstantStompPanelPos=panel.Position
+    end
+end)
 
-local oldRing=Workspace:FindFirstChild("Schmeckt_StompRadiusRing")
-if oldRing then oldRing:Destroy() end
-local ringFolder=Instance.new("Folder")
-ringFolder.Name="Schmeckt_StompRadiusRing"
-ringFolder.Parent=Workspace
-local SEGMENTS=60
-local THICK=0.07
+local ringFolder=Instance.new("Folder"); ringFolder.Name="Schmeckt_InstantStomp_Ring"; ringFolder.Parent=Workspace
+local SEGMENTS=64
+local THICK=0.08
 local YOFFSET=0.03
 local segments={}
 for i=1,SEGMENTS do
@@ -354,8 +398,6 @@ local function updateRing()
     local center=(res and res.Position or (hrp.Position-Vector3.new(0,3,0)))+Vector3.new(0,YOFFSET,0)
     local r=Shared.StompRadius
     local twoPi=math.pi*2
-    local vis=Shared.StompNearestEnabled
-
     for i=1,SEGMENTS do
         local a1=twoPi*(i-1)/SEGMENTS
         local a2=twoPi*(i)/SEGMENTS
@@ -368,14 +410,8 @@ local function updateRing()
         local part=segments[i]
         part.Size=Vector3.new(THICK,THICK,len)
         part.CFrame=cf
-        part.Transparency=vis and 0.5 or 1
+        part.Transparency=0.5
     end
 end
 
-table.insert(Shared.Connections[KEY_MAIN],RunService.Heartbeat:Connect(function()
-    updateRing()
-    if not Shared.StompNearestEnabled then return end
-    if Shared.__stompWorking then return end
-    local p,leg=getNearestDowned(Shared.StompRadius)
-    if p and leg then attachAndStomp(p,leg) end
-end))
+table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(updateRing))
