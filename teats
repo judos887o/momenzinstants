@@ -10,9 +10,8 @@ local MAINEVENT=ReplicatedStorage:FindFirstChild("MAINEVENT") or ReplicatedStora
 
 local Shared=getgenv().SchmecktHubPC or {}; getgenv().SchmecktHubPC=Shared
 Shared.Connections=Shared.Connections or {}
-Shared.InstantStomp=(Shared.InstantStomp~=false)
-Shared.StompNearestEnabled=(Shared.StompNearestEnabled==true)
 Shared.StompRadius=math.clamp(Shared.StompRadius or 50,0,50)
+Shared.StompNearestEnabled=(Shared.StompNearestEnabled==true)
 Shared.InstantStompPanelPos=Shared.InstantStompPanelPos or UDim2.new(0,40,0,40)
 
 if Shared.InstantStomp_Destroy then pcall(Shared.InstantStomp_Destroy) end
@@ -47,25 +46,46 @@ local TOUCH_RANGE=15
 local MIN_CD=0.05
 local lastStomp=0
 
-local valid={
-    ["Head"]=true,["HumanoidRootPart"]=true,["Torso"]=true,["Left Leg"]=true,["Right Leg"]=true,["Left Arm"]=true,["Right Arm"]=true,
-    ["UpperTorso"]=true,["LowerTorso"]=true,["LeftUpperArm"]=true,["LeftLowerArm"]=true,["RightUpperArm"]=true,["RightLowerArm"]=true,
-    ["LeftHand"]=true,["RightHand"]=true,["LeftUpperLeg"]=true,["LeftLowerLeg"]=true,["RightUpperLeg"]=true,["RightLowerLeg"]=true,
-    ["LeftFoot"]=true,["RightFoot"]=true
-}
-local legParts={
-    ["LeftFoot"]=true,["RightFoot"]=true,["LeftLowerLeg"]=true,["RightLowerLeg"]=true,["LeftUpperLeg"]=true,["RightUpperLeg"]=true,["LeftLeg"]=true,["RightLeg"]=true
-}
+local valid={["Head"]=true,["HumanoidRootPart"]=true,["Torso"]=true,["Left Leg"]=true,["Right Leg"]=true,["Left Arm"]=true,["Right Arm"]=true,["UpperTorso"]=true,["LowerTorso"]=true,["LeftUpperArm"]=true,["LeftLowerArm"]=true,["RightUpperArm"]=true,["RightLowerArm"]=true,["LeftHand"]=true,["RightHand"]=true,["LeftUpperLeg"]=true,["LeftLowerLeg"]=true,["RightUpperLeg"]=true,["RightLowerLeg"]=true,["LeftFoot"]=true,["RightFoot"]=true}
+local legParts={["LeftFoot"]=true,["RightFoot"]=true,["LeftLowerLeg"]=true,["RightLowerLeg"]=true,["LeftUpperLeg"]=true,["RightUpperLeg"]=true,["LeftLeg"]=true,["RightLeg"]=true}
 
-local function isDowned(p)
-    local ch=p and p.Character; if not ch then return false end
+local function findKOValue(ch)
     local be=ch:FindFirstChild("BodyEffects")
-    local KO=be and (be:FindFirstChild("K.O") or be:FindFirstChild("KO"))
-    local Dead=be and be:FindFirstChild("Dead")
-    if KO and KO.Value==true and not (Dead and Dead.Value==true) then return true end
-    local hum=ch:FindFirstChildOfClass("Humanoid"); if not hum then return false end
-    local s=hum:GetState()
-    if s==Enum.HumanoidStateType.Ragdoll or s==Enum.HumanoidStateType.FallingDown or s==Enum.HumanoidStateType.Physics or hum.PlatformStand then return true end
+    local ko=be and (be:FindFirstChild("K.O") or be:FindFirstChild("KO") or be:FindFirstChild("Knocked"))
+    if ko and ko:IsA("BoolValue") then return ko end
+    ko=ch:FindFirstChild("K.O") or ch:FindFirstChild("KO") or ch:FindFirstChild("Knocked")
+    if ko and ko:IsA("BoolValue") then return ko end
+    for _,d in ipairs(ch:GetDescendants()) do
+        if (d.Name=="K.O" or d.Name=="KO" or d.Name=="Knocked") and d:IsA("BoolValue") then return d end
+    end
+    return nil
+end
+
+local function isKO(p)
+    local ch=p and p.Character; if not ch then return false end
+    
+    -- Fix 1: ForceField Check (Spawn Protection)
+    if ch:FindFirstChildOfClass("ForceField") then return false end
+
+    local ko=findKOValue(ch)
+    if ko and ko.Value==true then
+        local be=ch:FindFirstChild("BodyEffects"); local dead=be and be:FindFirstChild("Dead")
+        if dead and dead.Value==true then return false end
+        local hum=ch:FindFirstChildOfClass("Humanoid"); if hum and hum.Health<=0 then return false end
+        return true
+    end
+
+    local hum=ch:FindFirstChildOfClass("Humanoid")
+    if hum then
+        -- Fix 2: Health Check. Frische Spawns haben 100 HP, Ragdolled Players < 20.
+        if hum.Health > 20 then return false end 
+        if hum.Health <= 0 then return false end
+
+        local st=hum:GetState()
+        if st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown or st==Enum.HumanoidStateType.Physics or hum.PlatformStand then
+            return true
+        end
+    end
     return false
 end
 
@@ -97,15 +117,20 @@ local function getNearest(maxDist)
     local hrp=myCh:FindFirstChild("HumanoidRootPart"); if not hrp then return end
     local bestPlr,bestPart,bestDist=nil,nil,math.huge
     for _,p in ipairs(Players:GetPlayers()) do
-        if p~=LP and isDowned(p) then
+        if p~=LP and isKO(p) then
             local ch=p.Character
             if ch then
                 local leg,d=nearestLeg(ch,hrp.Position)
-                if leg and d<bestDist then bestPlr,bestPart,bestDist=p,leg,d end
+                if leg then
+                    local dd=(hrp.Position-leg.Position).Magnitude
+                    if dd<bestDist and dd<=maxDist then
+                        bestPlr,bestPart,bestDist=p,leg,dd
+                    end
+                end
             end
         end
     end
-    if bestPlr and bestDist<= (maxDist or math.huge) then return bestPlr,bestPart,bestDist end
+    return bestPlr,bestPart,bestDist
 end
 
 local function hookAnim(ch)
@@ -113,7 +138,6 @@ local function hookAnim(ch)
         local hum=ch:WaitForChild("Humanoid",5); if not hum then return end
         local animator=hum:WaitForChild("Animator",5); if not animator then return end
         table.insert(Shared.Connections[KEY_CORE], animator.AnimationPlayed:Connect(function(track)
-            if not Shared.InstantStomp then return end
             local id=track.Animation and track.Animation.AnimationId or ""
             if tostring(id):find(ANIM_ID) then track:AdjustSpeed(100) end
         end))
@@ -121,12 +145,11 @@ local function hookAnim(ch)
 end
 
 table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(function()
-    if not Shared.InstantStomp then return end
     local now=tick(); if now-lastStomp<MIN_CD then return end
     local myCh=LP.Character; if not myCh then return end
     local myHRP=myCh:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
     for _,p in ipairs(Players:GetPlayers()) do
-        if p~=LP and isDowned(p) and inRange(p) then
+        if p~=LP and isKO(p) and inRange(p) then
             if MAINEVENT then MAINEVENT:FireServer("STOMP") end
             lastStomp=now
             return
@@ -135,7 +158,7 @@ table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(function
 end))
 
 table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(function()
-    if not Shared.InstantStomp or not Shared.StompNearestEnabled then return end
+    if not Shared.StompNearestEnabled then return end
     local myCh=LP.Character; if not myCh then return end
     local myHRP=myCh:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
     local t,leg=getNearest(Shared.StompRadius)
@@ -174,7 +197,7 @@ do
     end
     panel.Position=pos
 end
-panel.Size=UDim2.new(0,300,0,146)
+panel.Size=UDim2.new(0,300,0,124)
 panel.BackgroundColor3=Color3.fromRGB(120,0,0)
 panel.Parent=gui
 local pCorner=Instance.new("UICorner",panel) pCorner.CornerRadius=UDim.new(0,12)
@@ -199,48 +222,12 @@ title.TextSize=14
 title.TextXAlignment=Enum.TextXAlignment.Left
 title.Parent=dragBar
 
-local rowIS=Instance.new("Frame")
-rowIS.BackgroundTransparency=1
-rowIS.Position=UDim2.new(0,12,0,36)
-rowIS.Size=UDim2.new(1,-24,0,24)
-rowIS.Parent=panel
-local lblIS=Instance.new("TextLabel")
-lblIS.BackgroundTransparency=1
-lblIS.Position=UDim2.new(0,0,0,0)
-lblIS.Size=UDim2.new(1,-100,1,0)
-lblIS.Font=Enum.Font.GothamSemibold
-lblIS.Text="Instant Stomp"
-lblIS.TextColor3=Color3.new(1,1,1)
-lblIS.TextSize=12
-lblIS.TextXAlignment=Enum.TextXAlignment.Left
-lblIS.Parent=rowIS
-local pillIS=Instance.new("TextButton")
-pillIS.AnchorPoint=Vector2.new(1,0.5)
-pillIS.Position=UDim2.new(1,0,0.5,0)
-pillIS.Size=UDim2.new(0,84,0,24)
-pillIS.Font=Enum.Font.GothamBold
-pillIS.TextSize=12
-pillIS.TextColor3=Color3.new(1,1,1)
-pillIS.AutoButtonColor=false
-pillIS.Parent=rowIS
-local cIS=Instance.new("UICorner",pillIS) cIS.CornerRadius=UDim.new(0,999)
-local sIS=Instance.new("UIStroke",pillIS) sIS.Thickness=1 sIS.Transparency=0.25 sIS.Color=Color3.fromRGB(255,150,150)
-local function refreshIS()
-    pillIS.BackgroundColor3=Shared.InstantStomp and Color3.fromRGB(0,180,80) or Color3.fromRGB(175,50,120)
-    pillIS.Text=Shared.InstantStomp and "ON" or "OFF"
-end
-refreshIS()
-table.insert(Shared.Connections[KEY_UI], pillIS.MouseButton1Click:Connect(function()
-    Shared.InstantStomp=not Shared.InstantStomp
-    refreshIS()
-    if Shared.SaveConfig then Shared.SaveConfig() end
-end))
-
 local rowToggle=Instance.new("Frame")
 rowToggle.BackgroundTransparency=1
-rowToggle.Position=UDim2.new(0,12,0,64)
+rowToggle.Position=UDim2.new(0,12,0,36)
 rowToggle.Size=UDim2.new(1,-24,0,24)
 rowToggle.Parent=panel
+
 local lblT=Instance.new("TextLabel")
 lblT.BackgroundTransparency=1
 lblT.Position=UDim2.new(0,0,0,0)
@@ -251,6 +238,7 @@ lblT.TextColor3=Color3.new(1,1,1)
 lblT.TextSize=12
 lblT.TextXAlignment=Enum.TextXAlignment.Left
 lblT.Parent=rowToggle
+
 local pill=Instance.new("TextButton")
 pill.AnchorPoint=Vector2.new(1,0.5)
 pill.Position=UDim2.new(1,0,0.5,0)
@@ -275,9 +263,10 @@ end))
 
 local sliderRow=Instance.new("Frame")
 sliderRow.BackgroundTransparency=1
-sliderRow.Position=UDim2.new(0,12,0,94)
+sliderRow.Position=UDim2.new(0,12,0,68)
 sliderRow.Size=UDim2.new(1,-24,0,40)
 sliderRow.Parent=panel
+
 local lblR=Instance.new("TextLabel")
 lblR.BackgroundTransparency=1
 lblR.Position=UDim2.new(0,0,0,0)
@@ -297,14 +286,6 @@ bar.Parent=sliderRow
 local barC=Instance.new("UICorner",bar) barC.CornerRadius=UDim.new(0,8)
 local barS=Instance.new("UIStroke",bar) barS.Thickness=1 barS.Transparency=0.25 barS.Color=Color3.fromRGB(255,110,110)
 
-local hit=Instance.new("TextButton")
-hit.BackgroundTransparency=1
-hit.AutoButtonColor=false
-hit.Text=""
-hit.Position=UDim2.new(0,0,-0.8,0)
-hit.Size=UDim2.new(1,0,2.6,0)
-hit.Parent=sliderRow
-
 local fill=Instance.new("Frame")
 fill.BackgroundColor3=Color3.fromRGB(185,0,0)
 fill.Size=UDim2.new((Shared.StompRadius/50),0,1,0)
@@ -312,12 +293,19 @@ fill.Parent=bar
 local fillC=Instance.new("UICorner",fill) fillC.CornerRadius=UDim.new(0,8)
 
 local thumb=Instance.new("Frame")
-thumb.Size=UDim2.new(0,20,0,20)
+thumb.Size=UDim2.new(0,18,0,18)
 thumb.BackgroundColor3=Color3.fromRGB(255,150,150)
-thumb.Position=UDim2.new(Shared.StompRadius/50,-10,0.5,-10)
+thumb.Position=UDim2.new(Shared.StompRadius/50,-9,0.5,-9)
 thumb.Parent=bar
 local thC=Instance.new("UICorner",thumb) thC.CornerRadius=UDim.new(1,0)
 local thS=Instance.new("UIStroke",thumb) thS.Thickness=1 thS.Transparency=0.2 thS.Color=Color3.fromRGB(255,220,220)
+
+local hit=Instance.new("TextButton")
+hit.BackgroundTransparency=1
+hit.AutoButtonColor=false
+hit.Text=""
+hit.Size=UDim2.new(1,0,1,0)
+hit.Parent=bar
 
 local sliding=false
 local function setRadius(v)
@@ -325,7 +313,7 @@ local function setRadius(v)
     lblR.Text=("Radius: %d"):format(Shared.StompRadius)
     local r=(Shared.StompRadius/50)
     fill.Size=UDim2.new(r,0,1,0)
-    thumb.Position=UDim2.new(r,-10,0.5,-10)
+    thumb.Position=UDim2.new(r,-9,0.5,-9)
     if Shared.SaveConfig then Shared.SaveConfig() end
 end
 local function posToRad(x)
@@ -408,7 +396,7 @@ local function updateRing()
     local res=Workspace:Raycast(hrp.Position,Vector3.new(0,-100,0),rcParams)
     local center=(res and res.Position or (hrp.Position-Vector3.new(0,3,0)))+Vector3.new(0,YOFFSET,0)
     local r=Shared.StompRadius
-    local vis=(Shared.InstantStomp and Shared.StompNearestEnabled)
+    local vis=Shared.StompNearestEnabled
     local twoPi=math.pi*2
     for i=1,SEGMENTS do
         local a1=twoPi*(i-1)/SEGMENTS
