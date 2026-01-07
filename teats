@@ -5,13 +5,14 @@ local UserInputService=game:GetService("UserInputService")
 local CoreGui=game:GetService("CoreGui")
 local Workspace=game:GetService("Workspace")
 
-local LocalPlayer=Players.LocalPlayer
+local LP=Players.LocalPlayer
 local MAINEVENT=ReplicatedStorage:FindFirstChild("MAINEVENT") or ReplicatedStorage:WaitForChild("MAINEVENT",5)
 
 local Shared=getgenv().SchmecktHubPC or {}; getgenv().SchmecktHubPC=Shared
 Shared.Connections=Shared.Connections or {}
-Shared.StompRadius=math.clamp(Shared.StompRadius or 50,0,50)
+Shared.InstantStomp=(Shared.InstantStomp~=false)
 Shared.StompNearestEnabled=(Shared.StompNearestEnabled==true)
+Shared.StompRadius=math.clamp(Shared.StompRadius or 50,0,50)
 Shared.InstantStompPanelPos=Shared.InstantStompPanelPos or UDim2.new(0,40,0,40)
 
 if Shared.InstantStomp_Destroy then pcall(Shared.InstantStomp_Destroy) end
@@ -19,38 +20,34 @@ if Shared.InstantStomp_Destroy then pcall(Shared.InstantStomp_Destroy) end
 local KEY_CORE="InstantStompCore"
 local KEY_UI="InstantStompUI"
 
-local function DisconnectKey(k)
-    if Shared.Connections[k] then
-        for _,c in ipairs(Shared.Connections[k]) do pcall(function() c:Disconnect() end) end
-    end
+local function Discon(k)
+    if Shared.Connections[k] then for _,c in ipairs(Shared.Connections[k]) do pcall(function() c:Disconnect() end) end end
     Shared.Connections[k]={}
 end
 
-DisconnectKey(KEY_CORE)
-DisconnectKey(KEY_UI)
-local oldUI=(CoreGui:FindFirstChild("Schmeckt_InstantStomp_UI") or (LocalPlayer:FindFirstChildOfClass("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("Schmeckt_InstantStomp_UI")))
+Discon(KEY_CORE)
+Discon(KEY_UI)
+local oldUI=(CoreGui:FindFirstChild("Schmeckt_InstantStomp_UI") or (LP:FindFirstChildOfClass("PlayerGui") and LP.PlayerGui:FindFirstChild("Schmeckt_InstantStomp_UI")))
 if oldUI then oldUI:Destroy() end
 local oldRing=Workspace:FindFirstChild("Schmeckt_InstantStomp_Ring")
 if oldRing then oldRing:Destroy() end
 
-local function safeParentScreenGui(gui)
+local function safeParent(g)
     local ok=false
-    if syn and syn.protect_gui then pcall(function() syn.protect_gui(gui); gui.Parent=CoreGui; ok=true end) end
-    if not ok then ok=pcall(function() gui.Parent=CoreGui end) end
+    if syn and syn.protect_gui then pcall(function() syn.protect_gui(g); g.Parent=CoreGui; ok=true end) end
+    if not ok then ok=pcall(function() g.Parent=CoreGui end) end
     if not ok then
-        local pg=LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui",3)
-        if pg then gui.Parent=pg else gui.Parent=CoreGui end
+        local pg=LP:FindFirstChildOfClass("PlayerGui") or LP:WaitForChild("PlayerGui",3)
+        if pg then g.Parent=pg else g.Parent=CoreGui end
     end
 end
 
-local ANIMATION_ID="127290980842135"
+local ANIM_ID="127290980842135"
 local TOUCH_RANGE=15
-local ANIM_SPEED=100
-local MIN_COOLDOWN=0.05
+local MIN_CD=0.05
 local lastStomp=0
-local Destroyed=false
 
-local validBodyParts={
+local valid={
     ["Head"]=true,["HumanoidRootPart"]=true,["Torso"]=true,["Left Leg"]=true,["Right Leg"]=true,["Left Arm"]=true,["Right Arm"]=true,
     ["UpperTorso"]=true,["LowerTorso"]=true,["LeftUpperArm"]=true,["LeftLowerArm"]=true,["RightUpperArm"]=true,["RightLowerArm"]=true,
     ["LeftHand"]=true,["RightHand"]=true,["LeftUpperLeg"]=true,["LeftLowerLeg"]=true,["RightUpperLeg"]=true,["RightLowerLeg"]=true,
@@ -72,67 +69,64 @@ local function isDowned(p)
     return false
 end
 
-local function isInRange(p)
-    local myChar=LocalPlayer.Character; if not myChar then return false end
-    local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return false end
-    local ch=p.Character; if not ch then return false end
+local function inRange(p)
+    local myCh=LP.Character; if not myCh then return false end
+    local myHRP=myCh:FindFirstChild("HumanoidRootPart"); if not myHRP then return false end
+    local ch=p and p.Character; if not ch then return false end
     for _,part in ipairs(ch:GetChildren()) do
-        if part:IsA("BasePart") and validBodyParts[part.Name] then
+        if part:IsA("BasePart") and valid[part.Name] then
             if (myHRP.Position-part.Position).Magnitude<=TOUCH_RANGE then return true end
         end
     end
     return false
 end
 
-local function nearestLegPart(ch,refPos)
+local function nearestLeg(ch,ref)
     local best,bestD
     for _,p in ipairs(ch:GetChildren()) do
         if p:IsA("BasePart") and legParts[p.Name] then
-            local d=(refPos-p.Position).Magnitude
+            local d=(ref-p.Position).Magnitude
             if not bestD or d<bestD then best,bestD=p,d end
         end
     end
     return best,bestD
 end
 
-local function getNearestDowned(maxDist)
-    local myChar=LocalPlayer.Character; if not myChar then return end
-    local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
+local function getNearest(maxDist)
+    local myCh=LP.Character; if not myCh then return end
+    local hrp=myCh:FindFirstChild("HumanoidRootPart"); if not hrp then return end
     local bestPlr,bestPart,bestDist=nil,nil,math.huge
     for _,p in ipairs(Players:GetPlayers()) do
-        if p~=LocalPlayer and isDowned(p) then
+        if p~=LP and isDowned(p) then
             local ch=p.Character
             if ch then
-                local leg,d=nearestLegPart(ch,myHRP.Position)
-                if leg and d<bestDist then
-                    bestPlr,bestPart,bestDist=p,leg,d
-                end
+                local leg,d=nearestLeg(ch,hrp.Position)
+                if leg and d<bestDist then bestPlr,bestPart,bestDist=p,leg,d end
             end
         end
     end
-    if bestPlr and bestDist<= (maxDist or math.huge) then
-        return bestPlr,bestPart,bestDist
-    end
+    if bestPlr and bestDist<= (maxDist or math.huge) then return bestPlr,bestPart,bestDist end
 end
 
-local function hookAnimForCharacter(ch)
+local function hookAnim(ch)
     task.spawn(function()
         local hum=ch:WaitForChild("Humanoid",5); if not hum then return end
         local animator=hum:WaitForChild("Animator",5); if not animator then return end
         table.insert(Shared.Connections[KEY_CORE], animator.AnimationPlayed:Connect(function(track)
+            if not Shared.InstantStomp then return end
             local id=track.Animation and track.Animation.AnimationId or ""
-            if tostring(id):find(ANIMATION_ID) then track:AdjustSpeed(ANIM_SPEED) end
+            if tostring(id):find(ANIM_ID) then track:AdjustSpeed(100) end
         end))
     end)
 end
 
 table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(function()
-    if Destroyed then return end
-    local now=tick(); if now-lastStomp<MIN_COOLDOWN then return end
-    local myChar=LocalPlayer.Character; if not myChar then return end
-    local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
+    if not Shared.InstantStomp then return end
+    local now=tick(); if now-lastStomp<MIN_CD then return end
+    local myCh=LP.Character; if not myCh then return end
+    local myHRP=myCh:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
     for _,p in ipairs(Players:GetPlayers()) do
-        if p~=LocalPlayer and isDowned(p) and isInRange(p) then
+        if p~=LP and isDowned(p) and inRange(p) then
             if MAINEVENT then MAINEVENT:FireServer("STOMP") end
             lastStomp=now
             return
@@ -141,13 +135,12 @@ table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(function
 end))
 
 table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(function()
-    if Destroyed then return end
-    if not Shared.StompNearestEnabled then return end
-    local myChar=LocalPlayer.Character; if not myChar then return end
-    local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
-    local target,leg=getNearestDowned(Shared.StompRadius)
-    if target and leg then
-        local thrp=target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+    if not Shared.InstantStomp or not Shared.StompNearestEnabled then return end
+    local myCh=LP.Character; if not myCh then return end
+    local myHRP=myCh:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
+    local t,leg=getNearest(Shared.StompRadius)
+    if t and leg then
+        local thrp=t.Character and t.Character:FindFirstChild("HumanoidRootPart")
         if thrp then
             local desired=leg.Position+Vector3.new(0,1.05,0.2)
             myHRP.CFrame=CFrame.new(desired,thrp.Position)
@@ -155,15 +148,15 @@ table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(function
     end
 end))
 
-if LocalPlayer.Character then hookAnimForCharacter(LocalPlayer.Character) end
-table.insert(Shared.Connections[KEY_CORE], LocalPlayer.CharacterAdded:Connect(hookAnimForCharacter))
+if LP.Character then hookAnim(LP.Character) end
+table.insert(Shared.Connections[KEY_CORE], LP.CharacterAdded:Connect(hookAnim))
 
 local gui=Instance.new("ScreenGui")
 gui.Name="Schmeckt_InstantStomp_UI"
 gui.IgnoreGuiInset=true
 gui.ResetOnSpawn=false
 gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-safeParentScreenGui(gui)
+safeParent(gui)
 
 local panel=Instance.new("Frame")
 panel.Name="Panel"
@@ -181,7 +174,7 @@ do
     end
     panel.Position=pos
 end
-panel.Size=UDim2.new(0,280,0,128)
+panel.Size=UDim2.new(0,300,0,146)
 panel.BackgroundColor3=Color3.fromRGB(120,0,0)
 panel.Parent=gui
 local pCorner=Instance.new("UICorner",panel) pCorner.CornerRadius=UDim.new(0,12)
@@ -206,12 +199,48 @@ title.TextSize=14
 title.TextXAlignment=Enum.TextXAlignment.Left
 title.Parent=dragBar
 
+local rowIS=Instance.new("Frame")
+rowIS.BackgroundTransparency=1
+rowIS.Position=UDim2.new(0,12,0,36)
+rowIS.Size=UDim2.new(1,-24,0,24)
+rowIS.Parent=panel
+local lblIS=Instance.new("TextLabel")
+lblIS.BackgroundTransparency=1
+lblIS.Position=UDim2.new(0,0,0,0)
+lblIS.Size=UDim2.new(1,-100,1,0)
+lblIS.Font=Enum.Font.GothamSemibold
+lblIS.Text="Instant Stomp"
+lblIS.TextColor3=Color3.new(1,1,1)
+lblIS.TextSize=12
+lblIS.TextXAlignment=Enum.TextXAlignment.Left
+lblIS.Parent=rowIS
+local pillIS=Instance.new("TextButton")
+pillIS.AnchorPoint=Vector2.new(1,0.5)
+pillIS.Position=UDim2.new(1,0,0.5,0)
+pillIS.Size=UDim2.new(0,84,0,24)
+pillIS.Font=Enum.Font.GothamBold
+pillIS.TextSize=12
+pillIS.TextColor3=Color3.new(1,1,1)
+pillIS.AutoButtonColor=false
+pillIS.Parent=rowIS
+local cIS=Instance.new("UICorner",pillIS) cIS.CornerRadius=UDim.new(0,999)
+local sIS=Instance.new("UIStroke",pillIS) sIS.Thickness=1 sIS.Transparency=0.25 sIS.Color=Color3.fromRGB(255,150,150)
+local function refreshIS()
+    pillIS.BackgroundColor3=Shared.InstantStomp and Color3.fromRGB(0,180,80) or Color3.fromRGB(175,50,120)
+    pillIS.Text=Shared.InstantStomp and "ON" or "OFF"
+end
+refreshIS()
+table.insert(Shared.Connections[KEY_UI], pillIS.MouseButton1Click:Connect(function()
+    Shared.InstantStomp=not Shared.InstantStomp
+    refreshIS()
+    if Shared.SaveConfig then Shared.SaveConfig() end
+end))
+
 local rowToggle=Instance.new("Frame")
 rowToggle.BackgroundTransparency=1
-rowToggle.Position=UDim2.new(0,12,0,36)
+rowToggle.Position=UDim2.new(0,12,0,64)
 rowToggle.Size=UDim2.new(1,-24,0,24)
 rowToggle.Parent=panel
-
 local lblT=Instance.new("TextLabel")
 lblT.BackgroundTransparency=1
 lblT.Position=UDim2.new(0,0,0,0)
@@ -222,7 +251,6 @@ lblT.TextColor3=Color3.new(1,1,1)
 lblT.TextSize=12
 lblT.TextXAlignment=Enum.TextXAlignment.Left
 lblT.Parent=rowToggle
-
 local pill=Instance.new("TextButton")
 pill.AnchorPoint=Vector2.new(1,0.5)
 pill.Position=UDim2.new(1,0,0.5,0)
@@ -247,10 +275,9 @@ end))
 
 local sliderRow=Instance.new("Frame")
 sliderRow.BackgroundTransparency=1
-sliderRow.Position=UDim2.new(0,12,0,66)
-sliderRow.Size=UDim2.new(1,-24,0,50)
+sliderRow.Position=UDim2.new(0,12,0,94)
+sliderRow.Size=UDim2.new(1,-24,0,40)
 sliderRow.Parent=panel
-
 local lblR=Instance.new("TextLabel")
 lblR.BackgroundTransparency=1
 lblR.Position=UDim2.new(0,0,0,0)
@@ -264,7 +291,7 @@ lblR.Parent=sliderRow
 
 local bar=Instance.new("Frame")
 bar.BackgroundColor3=Color3.fromRGB(90,0,0)
-bar.Position=UDim2.new(0.30,12,0,18)
+bar.Position=UDim2.new(0.30,12,0,13)
 bar.Size=UDim2.new(0.70,-24,0,14)
 bar.Parent=sliderRow
 local barC=Instance.new("UICorner",bar) barC.CornerRadius=UDim.new(0,8)
@@ -274,8 +301,8 @@ local hit=Instance.new("TextButton")
 hit.BackgroundTransparency=1
 hit.AutoButtonColor=false
 hit.Text=""
-hit.Position=UDim2.new(0,0,-0.5,0)
-hit.Size=UDim2.new(1,0,2,0)
+hit.Position=UDim2.new(0,0,-0.8,0)
+hit.Size=UDim2.new(1,0,2.6,0)
 hit.Parent=sliderRow
 
 local fill=Instance.new("Frame")
@@ -293,8 +320,8 @@ local thC=Instance.new("UICorner",thumb) thC.CornerRadius=UDim.new(1,0)
 local thS=Instance.new("UIStroke",thumb) thS.Thickness=1 thS.Transparency=0.2 thS.Color=Color3.fromRGB(255,220,220)
 
 local sliding=false
-local function setRadius(val)
-    Shared.StompRadius=math.clamp(math.floor(val+0.5),0,50)
+local function setRadius(v)
+    Shared.StompRadius=math.clamp(math.floor(v+0.5),0,50)
     lblR.Text=("Radius: %d"):format(Shared.StompRadius)
     local r=(Shared.StompRadius/50)
     fill.Size=UDim2.new(r,0,1,0)
@@ -374,14 +401,14 @@ rcParams.FilterType=Enum.RaycastFilterType.Exclude
 rcParams.IgnoreWater=true
 
 local function updateRing()
-    if Destroyed then return end
-    local ch=LocalPlayer.Character
+    local ch=LP.Character
     local hrp=ch and ch:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
     rcParams.FilterDescendantsInstances={ch}
     local res=Workspace:Raycast(hrp.Position,Vector3.new(0,-100,0),rcParams)
     local center=(res and res.Position or (hrp.Position-Vector3.new(0,3,0)))+Vector3.new(0,YOFFSET,0)
     local r=Shared.StompRadius
+    local vis=(Shared.InstantStomp and Shared.StompNearestEnabled)
     local twoPi=math.pi*2
     for i=1,SEGMENTS do
         local a1=twoPi*(i-1)/SEGMENTS
@@ -395,24 +422,16 @@ local function updateRing()
         local part=segments[i]
         part.Size=Vector3.new(THICK,THICK,len)
         part.CFrame=cf
-        part.Transparency=0.5
+        part.Transparency=vis and 0.5 or 1
     end
 end
 table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(updateRing))
 
 local function destroyAll()
-    if Destroyed then return end
-    Destroyed=true
-    DisconnectKey(KEY_CORE)
-    DisconnectKey(KEY_UI)
-    local g=(CoreGui:FindFirstChild("Schmeckt_InstantStomp_UI") or (LocalPlayer:FindFirstChildOfClass("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("Schmeckt_InstantStomp_UI")))
+    Discon(KEY_CORE); Discon(KEY_UI)
+    local g=(CoreGui:FindFirstChild("Schmeckt_InstantStomp_UI") or (LP:FindFirstChildOfClass("PlayerGui") and LP.PlayerGui:FindFirstChild("Schmeckt_InstantStomp_UI")))
     if g then pcall(function() g:Destroy() end) end
     local rf=Workspace:FindFirstChild("Schmeckt_InstantStomp_Ring")
     if rf then pcall(function() rf:Destroy() end) end
 end
-
-table.insert(Shared.Connections[KEY_UI], gui.AncestryChanged:Connect(function(_,parent)
-    if not parent then destroyAll() end
-end))
-
 Shared.InstantStomp_Destroy=destroyAll
