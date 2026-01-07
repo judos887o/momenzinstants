@@ -8,12 +8,13 @@ local Workspace=game:GetService("Workspace")
 local LocalPlayer=Players.LocalPlayer
 local MAINEVENT=ReplicatedStorage:FindFirstChild("MAINEVENT") or ReplicatedStorage:WaitForChild("MAINEVENT",5)
 
-local Shared=getgenv().SchmecktHubPC or {}
-getgenv().SchmecktHubPC=Shared
+local Shared=getgenv().SchmecktHubPC or {}; getgenv().SchmecktHubPC=Shared
 Shared.Connections=Shared.Connections or {}
 Shared.StompRadius=math.clamp(Shared.StompRadius or 50,0,50)
 Shared.StompNearestEnabled=(Shared.StompNearestEnabled==true)
 Shared.InstantStompPanelPos=Shared.InstantStompPanelPos or UDim2.new(0,40,0,40)
+
+if Shared.InstantStomp_Destroy then pcall(Shared.InstantStomp_Destroy) end
 
 local KEY_CORE="InstantStompCore"
 local KEY_UI="InstantStompUI"
@@ -47,6 +48,7 @@ local TOUCH_RANGE=15
 local ANIM_SPEED=100
 local MIN_COOLDOWN=0.05
 local lastStomp=0
+local Destroyed=false
 
 local validBodyParts={
     ["Head"]=true,["HumanoidRootPart"]=true,["Torso"]=true,["Left Leg"]=true,["Right Leg"]=true,["Left Arm"]=true,["Right Arm"]=true,
@@ -66,9 +68,7 @@ local function isDowned(p)
     if KO and KO.Value==true and not (Dead and Dead.Value==true) then return true end
     local hum=ch:FindFirstChildOfClass("Humanoid"); if not hum then return false end
     local s=hum:GetState()
-    if s==Enum.HumanoidStateType.Ragdoll or s==Enum.HumanoidStateType.FallingDown or s==Enum.HumanoidStateType.Physics or hum.PlatformStand then
-        return true
-    end
+    if s==Enum.HumanoidStateType.Ragdoll or s==Enum.HumanoidStateType.FallingDown or s==Enum.HumanoidStateType.Physics or hum.PlatformStand then return true end
     return false
 end
 
@@ -127,6 +127,7 @@ local function hookAnimForCharacter(ch)
 end
 
 table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(function()
+    if Destroyed then return end
     local now=tick(); if now-lastStomp<MIN_COOLDOWN then return end
     local myChar=LocalPlayer.Character; if not myChar then return end
     local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
@@ -140,6 +141,7 @@ table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(function
 end))
 
 table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(function()
+    if Destroyed then return end
     if not Shared.StompNearestEnabled then return end
     local myChar=LocalPlayer.Character; if not myChar then return end
     local myHRP=myChar:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
@@ -179,7 +181,7 @@ do
     end
     panel.Position=pos
 end
-panel.Size=UDim2.new(0,300,0,138)
+panel.Size=UDim2.new(0,280,0,128)
 panel.BackgroundColor3=Color3.fromRGB(120,0,0)
 panel.Parent=gui
 local pCorner=Instance.new("UICorner",panel) pCorner.CornerRadius=UDim.new(0,12)
@@ -232,28 +234,27 @@ pill.AutoButtonColor=false
 pill.Parent=rowToggle
 local c=Instance.new("UICorner",pill) c.CornerRadius=UDim.new(0,999)
 local s=Instance.new("UIStroke",pill) s.Thickness=1 s.Transparency=0.25 s.Color=Color3.fromRGB(255,150,150)
-
 local function refreshPill()
     pill.BackgroundColor3=Shared.StompNearestEnabled and Color3.fromRGB(0,180,80) or Color3.fromRGB(175,50,120)
     pill.Text=Shared.StompNearestEnabled and "ON" or "OFF"
 end
 refreshPill()
-pill.MouseButton1Click:Connect(function()
+table.insert(Shared.Connections[KEY_UI], pill.MouseButton1Click:Connect(function()
     Shared.StompNearestEnabled=not Shared.StompNearestEnabled
     refreshPill()
     if Shared.SaveConfig then Shared.SaveConfig() end
-end)
+end))
 
 local sliderRow=Instance.new("Frame")
 sliderRow.BackgroundTransparency=1
-sliderRow.Position=UDim2.new(0,12,0,70)
-sliderRow.Size=UDim2.new(1,-24,0,56)
+sliderRow.Position=UDim2.new(0,12,0,66)
+sliderRow.Size=UDim2.new(1,-24,0,50)
 sliderRow.Parent=panel
 
 local lblR=Instance.new("TextLabel")
 lblR.BackgroundTransparency=1
 lblR.Position=UDim2.new(0,0,0,0)
-lblR.Size=UDim2.new(0.26,0,1,0)
+lblR.Size=UDim2.new(0.28,0,1,0)
 lblR.Font=Enum.Font.GothamSemibold
 lblR.Text=("Radius: %d"):format(Shared.StompRadius)
 lblR.TextColor3=Color3.new(1,1,1)
@@ -263,8 +264,8 @@ lblR.Parent=sliderRow
 
 local bar=Instance.new("Frame")
 bar.BackgroundColor3=Color3.fromRGB(90,0,0)
-bar.Position=UDim2.new(0.28,12,0,18)
-bar.Size=UDim2.new(0.72,-24,0,16)
+bar.Position=UDim2.new(0.30,12,0,18)
+bar.Size=UDim2.new(0.70,-24,0,14)
 bar.Parent=sliderRow
 local barC=Instance.new("UICorner",bar) barC.CornerRadius=UDim.new(0,8)
 local barS=Instance.new("UIStroke",bar) barS.Thickness=1 barS.Transparency=0.25 barS.Color=Color3.fromRGB(255,110,110)
@@ -273,8 +274,8 @@ local hit=Instance.new("TextButton")
 hit.BackgroundTransparency=1
 hit.AutoButtonColor=false
 hit.Text=""
-hit.Position=UDim2.new(0,0,0,0)
-hit.Size=UDim2.new(1,0,1,0)
+hit.Position=UDim2.new(0,0,-0.5,0)
+hit.Size=UDim2.new(1,0,2,0)
 hit.Parent=sliderRow
 
 local fill=Instance.new("Frame")
@@ -306,62 +307,45 @@ local function posToRad(x)
     local u=(w>0) and math.clamp((x-bx)/w,0,1) or 0
     setRadius(u*50)
 end
+local function beginSlide(x) sliding=true; posToRad(x) end
+local function endSlide() sliding=false end
 
-local function beginSlide(x)
-    sliding=true
-    posToRad(x)
-end
-local function endSlide()
-    sliding=false
-end
-
-hit.InputBegan:Connect(function(i)
-    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-        beginSlide(i.Position.X)
-    end
-end)
-bar.InputBegan:Connect(function(i)
-    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-        beginSlide(i.Position.X)
-    end
-end)
-thumb.InputBegan:Connect(function(i)
-    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-        beginSlide(i.Position.X)
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(i)
+table.insert(Shared.Connections[KEY_UI], hit.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then beginSlide(i.Position.X) end
+end))
+table.insert(Shared.Connections[KEY_UI], bar.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then beginSlide(i.Position.X) end
+end))
+table.insert(Shared.Connections[KEY_UI], thumb.InputBegan:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then beginSlide(i.Position.X) end
+end))
+table.insert(Shared.Connections[KEY_UI], UserInputService.InputChanged:Connect(function(i)
     if not sliding then return end
-    if i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch then
-        posToRad(i.Position.X)
-    end
-end)
-UserInputService.InputEnded:Connect(function(i)
-    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then
-        endSlide()
-    end
-end)
+    if i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch then posToRad(i.Position.X) end
+end))
+table.insert(Shared.Connections[KEY_UI], UserInputService.InputEnded:Connect(function(i)
+    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then endSlide() end
+end))
 
 local dragging=false
 local dragStart
 local startPos
-dragBar.InputBegan:Connect(function(i)
+table.insert(Shared.Connections[KEY_UI], dragBar.InputBegan:Connect(function(i)
     if i.UserInputType==Enum.UserInputType.MouseButton1 then
         dragging=true
         dragStart=i.Position
         startPos=panel.Position
         i.Changed:Connect(function() if i.UserInputState==Enum.UserInputState.End then dragging=false end end)
     end
-end)
-UserInputService.InputChanged:Connect(function(i)
+end))
+table.insert(Shared.Connections[KEY_UI], UserInputService.InputChanged:Connect(function(i)
     if not dragging then return end
     if i.UserInputType==Enum.UserInputType.MouseMovement then
         local d=i.Position-dragStart
         panel.Position=UDim2.new(0,startPos.X.Offset+d.X,0,startPos.Y.Offset+d.Y)
         Shared.InstantStompPanelPos=panel.Position
     end
-end)
+end))
 
 local ringFolder=Instance.new("Folder"); ringFolder.Name="Schmeckt_InstantStomp_Ring"; ringFolder.Parent=Workspace
 local SEGMENTS=64
@@ -390,6 +374,7 @@ rcParams.FilterType=Enum.RaycastFilterType.Exclude
 rcParams.IgnoreWater=true
 
 local function updateRing()
+    if Destroyed then return end
     local ch=LocalPlayer.Character
     local hrp=ch and ch:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
@@ -413,5 +398,21 @@ local function updateRing()
         part.Transparency=0.5
     end
 end
-
 table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(updateRing))
+
+local function destroyAll()
+    if Destroyed then return end
+    Destroyed=true
+    DisconnectKey(KEY_CORE)
+    DisconnectKey(KEY_UI)
+    local g=(CoreGui:FindFirstChild("Schmeckt_InstantStomp_UI") or (LocalPlayer:FindFirstChildOfClass("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("Schmeckt_InstantStomp_UI")))
+    if g then pcall(function() g:Destroy() end) end
+    local rf=Workspace:FindFirstChild("Schmeckt_InstantStomp_Ring")
+    if rf then pcall(function() rf:Destroy() end) end
+end
+
+table.insert(Shared.Connections[KEY_UI], gui.AncestryChanged:Connect(function(_,parent)
+    if not parent then destroyAll() end
+end))
+
+Shared.InstantStomp_Destroy=destroyAll
