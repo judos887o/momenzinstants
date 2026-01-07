@@ -21,10 +21,9 @@ local KEY_UI="StompNearestUI"
 DisconnectKey(KEY_MAIN)
 DisconnectKey(KEY_UI)
 
-Shared.AutoStomp = (Shared.AutoStomp == true) -- default OFF unless explicitly set true before
-Shared.StompNearestEnabled=Shared.StompNearestEnabled or false
-Shared.StompBtnPos=Shared.StompBtnPos or UDim2.new(1,-190,0,20)
-Shared.StompRadius=math.clamp(Shared.StompRadius or 50,0,50)
+Shared.StompNearestEnabled = (Shared.StompNearestEnabled ~= false)
+Shared.StompBtnPos = Shared.StompBtnPos or UDim2.new(1,-190,0,20)
+Shared.StompRadius = math.clamp(Shared.StompRadius or 50,0,50)
 
 local ANIMATION_ID="127290980842135"
 local TOUCH_RANGE=15
@@ -162,7 +161,14 @@ local function attachAndStomp(plr,leg)
     Shared.__stompWorking=false
 end
 
-local oldUI=CoreGui:FindFirstChild("Schmeckt_StompNearest_UI")
+local function safeParentScreenGui(gui)
+    local ok=false
+    if syn and syn.protect_gui then pcall(function() syn.protect_gui(gui); gui.Parent=CoreGui; ok=true end) end
+    if not ok then ok=pcall(function() gui.Parent=CoreGui end) end
+    if not ok then local pg=LocalPlayer:FindFirstChildOfClass("PlayerGui") or LocalPlayer:WaitForChild("PlayerGui",3); if pg then gui.Parent=pg else gui.Parent=CoreGui end end
+end
+
+local oldUI=(CoreGui:FindFirstChild("Schmeckt_StompNearest_UI") or (LocalPlayer:FindFirstChildOfClass("PlayerGui") and LocalPlayer.PlayerGui:FindFirstChild("Schmeckt_StompNearest_UI")))
 if oldUI then oldUI:Destroy() end
 
 local gui=Instance.new("ScreenGui")
@@ -170,7 +176,7 @@ gui.Name="Schmeckt_StompNearest_UI"
 gui.IgnoreGuiInset=true
 gui.ResetOnSpawn=false
 gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-gui.Parent=CoreGui
+safeParentScreenGui(gui)
 
 local btn=Instance.new("TextButton")
 btn.Name="StompNearestBtn"
@@ -184,36 +190,32 @@ btn.TextSize=14
 btn.Text=""
 btn.AutoButtonColor=false
 btn.Parent=gui
-local cornerB=Instance.new("UICorner",btn)
-cornerB.CornerRadius=UDim.new(0,12)
-local strokeB=Instance.new("UIStroke",btn)
-strokeB.Thickness=1
-strokeB.Transparency=0.15
-strokeB.Color=Color3.fromRGB(255,150,150)
+local cornerB=Instance.new("UICorner",btn) cornerB.CornerRadius=UDim.new(0,12)
+local strokeB=Instance.new("UIStroke",btn) strokeB.Thickness=1 strokeB.Transparency=0.15 strokeB.Color=Color3.fromRGB(255,150,150)
 local grad=Instance.new("UIGradient",btn)
-grad.Color=ColorSequence.new({
-    ColorSequenceKeypoint.new(0,Color3.fromRGB(140,0,0)),
-    ColorSequenceKeypoint.new(1,Color3.fromRGB(90,0,0))
-})
+
+local function setUI(active)
+    if active then
+        grad.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(185,0,0)),ColorSequenceKeypoint.new(1,Color3.fromRGB(140,0,0))})
+        btn.Text="Stomp nearest: ON"
+    else
+        grad.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(140,0,0)),ColorSequenceKeypoint.new(1,Color3.fromRGB(90,0,0))})
+        btn.Text="Stomp nearest: OFF"
+    end
+end
+setUI(Shared.StompNearestEnabled)
 
 local radiusPanel=Instance.new("Frame")
 radiusPanel.Name="RadiusPanel"
 radiusPanel.AnchorPoint=Vector2.new(1,0)
 radiusPanel.Position=UDim2.new(btn.Position.X.Scale,btn.Position.X.Offset,btn.Position.Y.Scale,btn.Position.Y.Offset+44)
-radiusPanel.Size=UDim2.new(0,200,0,74)
+radiusPanel.Size=UDim2.new(0,200,0,54)
 radiusPanel.BackgroundColor3=Color3.fromRGB(120,0,0)
 radiusPanel.Parent=gui
-local cornerP=Instance.new("UICorner",radiusPanel)
-cornerP.CornerRadius=UDim.new(0,12)
-local strokeP=Instance.new("UIStroke",radiusPanel)
-strokeP.Thickness=1
-strokeP.Transparency=0.15
-strokeP.Color=Color3.fromRGB(255,150,150)
+local cornerP=Instance.new("UICorner",radiusPanel) cornerP.CornerRadius=UDim.new(0,12)
+local strokeP=Instance.new("UIStroke",radiusPanel) strokeP.Thickness=1 strokeP.Transparency=0.15 strokeP.Color=Color3.fromRGB(255,150,150)
 local gradP=Instance.new("UIGradient",radiusPanel)
-gradP.Color=ColorSequence.new({
-    ColorSequenceKeypoint.new(0,Color3.fromRGB(150,0,0)),
-    ColorSequenceKeypoint.new(1,Color3.fromRGB(110,0,0))
-})
+gradP.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(150,0,0)),ColorSequenceKeypoint.new(1,Color3.fromRGB(110,0,0))})
 
 local lbl=Instance.new("TextLabel")
 lbl.BackgroundTransparency=1
@@ -230,74 +232,28 @@ bar.BackgroundColor3=Color3.fromRGB(90,0,0)
 bar.Size=UDim2.new(1,-16,0,8)
 bar.Position=UDim2.new(0,8,0,28)
 bar.Parent=radiusPanel
-local cornerBar=Instance.new("UICorner",bar)
-cornerBar.CornerRadius=UDim.new(0,6)
-local barStroke=Instance.new("UIStroke",bar)
-barStroke.Thickness=1
-barStroke.Transparency=0.25
-barStroke.Color=Color3.fromRGB(255,110,110)
+local cornerBar=Instance.new("UICorner",bar) cornerBar.CornerRadius=UDim.new(0,6)
+local barStroke=Instance.new("UIStroke",bar) barStroke.Thickness=1 barStroke.Transparency=0.25 barStroke.Color=Color3.fromRGB(255,110,110)
 
 local fill=Instance.new("Frame")
 fill.BackgroundColor3=Color3.fromRGB(185,0,0)
 fill.Size=UDim2.new(0,0,1,0)
 fill.Position=UDim2.new(0,0,0,0)
 fill.Parent=bar
-local cornerFill=Instance.new("UICorner",fill)
-cornerFill.CornerRadius=UDim.new(0,6)
-local fillGrad=Instance.new("UIGradient",fill)
-fillGrad.Color=ColorSequence.new({
-    ColorSequenceKeypoint.new(0,Color3.fromRGB(185,0,0)),
-    ColorSequenceKeypoint.new(1,Color3.fromRGB(140,0,0))
-})
+local cornerFill=Instance.new("UICorner",fill) cornerFill.CornerRadius=UDim.new(0,6)
+local fillGrad=Instance.new("UIGradient",fill) fillGrad.Color=ColorSequence.new({ColorSequenceKeypoint.new(0,Color3.fromRGB(185,0,0)),ColorSequenceKeypoint.new(1,Color3.fromRGB(140,0,0))})
 
 local thumb=Instance.new("Frame")
 thumb.Size=UDim2.new(0,12,0,12)
 thumb.BackgroundColor3=Color3.fromRGB(255,150,150)
 thumb.Parent=bar
-local cornerThumb=Instance.new("UICorner",thumb)
-cornerThumb.CornerRadius=UDim.new(1,0)
-local thumbStroke=Instance.new("UIStroke",thumb)
-thumbStroke.Thickness=1
-thumbStroke.Transparency=0.2
-thumbStroke.Color=Color3.fromRGB(255,220,220)
+local cornerThumb=Instance.new("UICorner",thumb) cornerThumb.CornerRadius=UDim.new(1,0)
+local thumbStroke=Instance.new("UIStroke",thumb) thumbStroke.Thickness=1 thumbStroke.Transparency=0.2 thumbStroke.Color=Color3.fromRGB(255,220,220)
 
--- AutoStomp toggle (separat)
-local autoBtn=Instance.new("TextButton")
-autoBtn.Size=UDim2.new(0, 120, 0, 24)
-autoBtn.Position=UDim2.new(1, -128, 0, 44)
-autoBtn.BackgroundColor3=Shared.AutoStomp and Color3.fromRGB(0,180,80) or Color3.fromRGB(175,50,120)
-autoBtn.TextColor3=Color3.fromRGB(255,255,255)
-autoBtn.Text=(Shared.AutoStomp and "Auto Stomp: ON" or "Auto Stomp: OFF")
-autoBtn.Font=Enum.Font.GothamBold
-autoBtn.TextSize=12
-autoBtn.Parent=radiusPanel
-local autoCorner=Instance.new("UICorner",autoBtn) autoCorner.CornerRadius=UDim.new(0,8)
-local autoStroke=Instance.new("UIStroke",autoBtn) autoStroke.Thickness=1 autoStroke.Transparency=0.25 autoStroke.Color=Color3.fromRGB(255,150,150)
-local function refreshAutoBtn()
-    autoBtn.BackgroundColor3=Shared.AutoStomp and Color3.fromRGB(0,180,80) or Color3.fromRGB(175,50,120)
-    autoBtn.Text=(Shared.AutoStomp and "Auto Stomp: ON" or "Auto Stomp: OFF")
-end
-autoBtn.MouseButton1Click:Connect(function()
-    Shared.AutoStomp = not Shared.AutoStomp
-    refreshAutoBtn()
+btn.MouseButton1Click:Connect(function()
+    Shared.StompNearestEnabled=not Shared.StompNearestEnabled
+    setUI(Shared.StompNearestEnabled)
 end)
-refreshAutoBtn()
-
-local function setUI(active)
-    if active then
-        grad.Color=ColorSequence.new({
-            ColorSequenceKeypoint.new(0,Color3.fromRGB(185,0,0)),
-            ColorSequenceKeypoint.new(1,Color3.fromRGB(140,0,0))
-        })
-        btn.Text="Stomp nearest: ON"
-    else
-        grad.Color=ColorSequence.new({
-            ColorSequenceKeypoint.new(0,Color3.fromRGB(140,0,0)),
-            ColorSequenceKeypoint.new(1,Color3.fromRGB(90,0,0))
-        })
-        btn.Text="Stomp nearest: OFF"
-    end
-end
 
 local sliding=false
 local function setRadius(val)
@@ -309,6 +265,7 @@ local function setRadius(val)
     local x=math.floor(ratio*w)
     thumb.Position=UDim2.new(0,x-6,0.5,-6)
 end
+setRadius(Shared.StompRadius)
 
 local function posToRadius(x)
     local bx=bar.AbsolutePosition.X
@@ -335,14 +292,6 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
-setUI(Shared.StompNearestEnabled)
-setRadius(Shared.StompRadius)
-
-btn.MouseButton1Click:Connect(function()
-    Shared.StompNearestEnabled=not Shared.StompNearestEnabled
-    setUI(Shared.StompNearestEnabled)
-end)
-
 do
     local dragging=false
     local dragStart,startPos
@@ -366,26 +315,31 @@ do
     end)
 end
 
--- RING: weißer Outline-Ring (innen leer) via Mesh (Torus)
 local oldRing=Workspace:FindFirstChild("Schmeckt_StompRadiusRing")
 if oldRing then oldRing:Destroy() end
-local ring=Instance.new("Part")
-ring.Name="Schmeckt_StompRadiusRing"
-ring.Anchored=true
-ring.CanCollide=false
-ring.CanQuery=false
-ring.CanTouch=false
-ring.Material=Enum.Material.Neon
-ring.Color=Color3.fromRGB(255,255,255)
-ring.Transparency=0.35
-ring.Size=Vector3.new(1,1,1)
-ring.Parent=Workspace
-
-local ringMesh=Instance.new("SpecialMesh")
-ringMesh.MeshType=Enum.MeshType.FileMesh
-ringMesh.MeshId="rbxassetid://3270017" -- Ring/Torus Mesh
-ringMesh.Parent=ring
-local RING_THICKNESS=0.12
+local ringFolder=Instance.new("Folder")
+ringFolder.Name="Schmeckt_StompRadiusRing"
+ringFolder.Parent=Workspace
+local SEGMENTS=60
+local THICK=0.07
+local YOFFSET=0.03
+local segments={}
+for i=1,SEGMENTS do
+    local p=Instance.new("Part")
+    p.Name="Seg"..i
+    p.Anchored=true
+    p.CanCollide=false
+    p.CanQuery=false
+    p.CanTouch=false
+    p.Material=Enum.Material.Neon
+    p.Color=Color3.new(1,1,1)
+    p.Transparency=0.5
+    p.Size=Vector3.new(THICK,THICK,0.2)
+    p.TopSurface=Enum.SurfaceType.Smooth
+    p.BottomSurface=Enum.SurfaceType.Smooth
+    p.Parent=ringFolder
+    segments[i]=p
+end
 
 local rcParams=RaycastParams.new()
 rcParams.FilterType=Enum.RaycastFilterType.Exclude
@@ -397,11 +351,25 @@ local function updateRing()
     if not hrp then return end
     rcParams.FilterDescendantsInstances={ch}
     local res=Workspace:Raycast(hrp.Position,Vector3.new(0,-100,0),rcParams)
-    local pos=(res and res.Position or (hrp.Position-Vector3.new(0,3,0)))+Vector3.new(0,0.03,0)
-    local d=math.max(Shared.StompRadius*2,0.1)
-    ringMesh.Scale=Vector3.new(d,RING_THICKNESS,d)
-    ring.CFrame=CFrame.new(pos)
-    ring.Transparency = Shared.StompNearestEnabled and 0.35 or 1
+    local center=(res and res.Position or (hrp.Position-Vector3.new(0,3,0)))+Vector3.new(0,YOFFSET,0)
+    local r=Shared.StompRadius
+    local twoPi=math.pi*2
+    local vis=Shared.StompNearestEnabled
+
+    for i=1,SEGMENTS do
+        local a1=twoPi*(i-1)/SEGMENTS
+        local a2=twoPi*(i)/SEGMENTS
+        local p1=center+Vector3.new(math.cos(a1)*r,0,math.sin(a1)*r)
+        local p2=center+Vector3.new(math.cos(a2)*r,0,math.sin(a2)*r)
+        local mid=(p1+p2)/2
+        local dir=(p2-p1)
+        local len=math.max(dir.Magnitude,1e-4)
+        local cf=CFrame.lookAt(mid, mid+dir, Vector3.yAxis)
+        local part=segments[i]
+        part.Size=Vector3.new(THICK,THICK,len)
+        part.CFrame=cf
+        part.Transparency=vis and 0.5 or 1
+    end
 end
 
 table.insert(Shared.Connections[KEY_MAIN],RunService.Heartbeat:Connect(function()
@@ -409,7 +377,5 @@ table.insert(Shared.Connections[KEY_MAIN],RunService.Heartbeat:Connect(function(
     if not Shared.StompNearestEnabled then return end
     if Shared.__stompWorking then return end
     local p,leg=getNearestDowned(Shared.StompRadius)
-    if p and leg then
-        attachAndStomp(p,leg)
-    end
+    if p and leg then attachAndStomp(p,leg) end
 end))
