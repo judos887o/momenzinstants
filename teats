@@ -4,6 +4,7 @@ local RunService=game:GetService("RunService")
 local UserInputService=game:GetService("UserInputService")
 local CoreGui=game:GetService("CoreGui")
 local Workspace=game:GetService("Workspace")
+local TweenService=game:GetService("TweenService")
 
 local LP=Players.LocalPlayer
 local MAINEVENT=ReplicatedStorage:FindFirstChild("MAINEVENT") or ReplicatedStorage:WaitForChild("MAINEVENT",5)
@@ -63,10 +64,7 @@ end
 
 local function isKO(p)
     local ch=p and p.Character; if not ch then return false end
-    
-    -- Fix 1: ForceField Check (Spawn Protection)
     if ch:FindFirstChildOfClass("ForceField") then return false end
-
     local ko=findKOValue(ch)
     if ko and ko.Value==true then
         local be=ch:FindFirstChild("BodyEffects"); local dead=be and be:FindFirstChild("Dead")
@@ -74,13 +72,10 @@ local function isKO(p)
         local hum=ch:FindFirstChildOfClass("Humanoid"); if hum and hum.Health<=0 then return false end
         return true
     end
-
     local hum=ch:FindFirstChildOfClass("Humanoid")
     if hum then
-        -- Fix 2: Health Check. Frische Spawns haben 100 HP, Ragdolled Players < 20.
         if hum.Health > 20 then return false end 
         if hum.Health <= 0 then return false end
-
         local st=hum:GetState()
         if st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown or st==Enum.HumanoidStateType.Physics or hum.PlatformStand then
             return true
@@ -174,6 +169,16 @@ end))
 if LP.Character then hookAnim(LP.Character) end
 table.insert(Shared.Connections[KEY_CORE], LP.CharacterAdded:Connect(hookAnim))
 
+local Theme = {
+    Background = Color3.fromRGB(15, 5, 5),
+    Accent = Color3.fromRGB(220, 0, 0),
+    ToggleOn = Color3.fromRGB(200, 0, 0),
+    ToggleOff = Color3.fromRGB(45, 10, 10),
+    Text = Color3.fromRGB(255, 255, 255),
+    SubText = Color3.fromRGB(255, 150, 150),
+    Stroke = Color3.fromRGB(80, 0, 0)
+}
+
 local gui=Instance.new("ScreenGui")
 gui.Name="Schmeckt_InstantStomp_UI"
 gui.IgnoreGuiInset=true
@@ -197,128 +202,153 @@ do
     end
     panel.Position=pos
 end
-panel.Size=UDim2.new(0,300,0,124)
-panel.BackgroundColor3=Color3.fromRGB(120,0,0)
+panel.Size=UDim2.new(0,260,0,150)
+panel.BackgroundColor3=Theme.Background
+panel.BackgroundTransparency=0.05
+panel.BorderSizePixel=0
 panel.Parent=gui
-local pCorner=Instance.new("UICorner",panel) pCorner.CornerRadius=UDim.new(0,12)
-local pStroke=Instance.new("UIStroke",panel) pStroke.Thickness=1 pStroke.Transparency=0.15 pStroke.Color=Color3.fromRGB(255,150,150)
 
-local dragBar=Instance.new("Frame")
-dragBar.BackgroundColor3=Color3.fromRGB(140,0,0)
-dragBar.Position=UDim2.new(0,0,0,0)
-dragBar.Size=UDim2.new(1,0,0,30)
-dragBar.Parent=panel
-local dCorner=Instance.new("UICorner",dragBar) dCorner.CornerRadius=UDim.new(0,12)
-local dStroke=Instance.new("UIStroke",dragBar) dStroke.Thickness=1 dStroke.Transparency=0.2 dStroke.Color=Color3.fromRGB(255,150,150)
+local pCorner=Instance.new("UICorner",panel) 
+pCorner.CornerRadius=UDim.new(0,12)
+
+local pStroke=Instance.new("UIStroke",panel)
+pStroke.Thickness=1.5
+pStroke.Transparency=0.5
+pStroke.Color=Theme.Accent
+
+local HeaderFrame=Instance.new("Frame")
+HeaderFrame.Name="Header"
+HeaderFrame.Size=UDim2.new(1,0,0,40)
+HeaderFrame.BackgroundColor3=Theme.ToggleOff
+HeaderFrame.BorderSizePixel=0
+HeaderFrame.Parent=panel
+
+local HeaderCorner=Instance.new("UICorner",HeaderFrame)
+HeaderCorner.CornerRadius=UDim.new(0,12)
 
 local title=Instance.new("TextLabel")
 title.BackgroundTransparency=1
 title.Position=UDim2.new(0,12,0,0)
 title.Size=UDim2.new(1,-24,1,0)
-title.Font=Enum.Font.GothamBold
-title.Text="Instant Stomp"
-title.TextColor3=Color3.new(1,1,1)
-title.TextSize=14
+title.Font=Enum.Font.GothamBlack
+title.Text="INSTANT STOMP"
+title.TextColor3=Theme.Accent
+title.TextSize=11
 title.TextXAlignment=Enum.TextXAlignment.Left
-title.Parent=dragBar
+title.Parent=HeaderFrame
 
 local rowToggle=Instance.new("Frame")
 rowToggle.BackgroundTransparency=1
-rowToggle.Position=UDim2.new(0,12,0,36)
-rowToggle.Size=UDim2.new(1,-24,0,24)
+rowToggle.Position=UDim2.new(0,12,0,50)
+rowToggle.Size=UDim2.new(1,-24,0,30)
 rowToggle.Parent=panel
 
 local lblT=Instance.new("TextLabel")
 lblT.BackgroundTransparency=1
 lblT.Position=UDim2.new(0,0,0,0)
-lblT.Size=UDim2.new(1,-100,1,0)
-lblT.Font=Enum.Font.GothamSemibold
+lblT.Size=UDim2.new(1,-50,1,0)
+lblT.Font=Enum.Font.GothamMedium
 lblT.Text="Stomp Nearest"
-lblT.TextColor3=Color3.new(1,1,1)
-lblT.TextSize=12
+lblT.TextColor3=Theme.Text
+lblT.TextSize=13
 lblT.TextXAlignment=Enum.TextXAlignment.Left
 lblT.Parent=rowToggle
 
-local pill=Instance.new("TextButton")
-pill.AnchorPoint=Vector2.new(1,0.5)
-pill.Position=UDim2.new(1,0,0.5,0)
-pill.Size=UDim2.new(0,84,0,24)
-pill.Font=Enum.Font.GothamBold
-pill.TextSize=12
-pill.TextColor3=Color3.new(1,1,1)
-pill.AutoButtonColor=false
-pill.Parent=rowToggle
-local c=Instance.new("UICorner",pill) c.CornerRadius=UDim.new(0,999)
-local s=Instance.new("UIStroke",pill) s.Thickness=1 s.Transparency=0.25 s.Color=Color3.fromRGB(255,150,150)
-local function refreshPill()
-    pill.BackgroundColor3=Shared.StompNearestEnabled and Color3.fromRGB(0,180,80) or Color3.fromRGB(175,50,120)
-    pill.Text=Shared.StompNearestEnabled and "ON" or "OFF"
+local SwitchBg=Instance.new("Frame")
+SwitchBg.Size=UDim2.new(0,36,0,20)
+SwitchBg.Position=UDim2.new(1,-40,0.5,-10)
+SwitchBg.BackgroundColor3=Shared.StompNearestEnabled and Theme.ToggleOn or Theme.ToggleOff
+SwitchBg.BorderSizePixel=0
+SwitchBg.Parent=rowToggle
+
+local SwCorner=Instance.new("UICorner",SwitchBg)
+SwCorner.CornerRadius=UDim.new(1,0)
+
+local Circle=Instance.new("Frame")
+Circle.Size=UDim2.new(0,16,0,16)
+local startX=Shared.StompNearestEnabled and 18 or 2
+Circle.Position=UDim2.new(0,startX,0.5,-8)
+Circle.BackgroundColor3=Color3.fromRGB(255,255,255)
+Circle.BorderSizePixel=0
+Circle.Parent=SwitchBg
+
+local CCorner=Instance.new("UICorner",Circle)
+CCorner.CornerRadius=UDim.new(1,0)
+
+local ToggleBtn=Instance.new("TextButton")
+ToggleBtn.Size=UDim2.new(1,0,1,0)
+ToggleBtn.BackgroundTransparency=1
+ToggleBtn.Text=""
+ToggleBtn.Parent=rowToggle
+
+local function updateToggle()
+    local targetX=Shared.StompNearestEnabled and 18 or 2
+    local targetColor=Shared.StompNearestEnabled and Theme.ToggleOn or Theme.ToggleOff
+    TweenService:Create(Circle,TweenInfo.new(0.2),{Position=UDim2.new(0,targetX,0.5,-8)}):Play()
+    TweenService:Create(SwitchBg,TweenInfo.new(0.2),{BackgroundColor3=targetColor}):Play()
 end
-refreshPill()
-table.insert(Shared.Connections[KEY_UI], pill.MouseButton1Click:Connect(function()
+
+table.insert(Shared.Connections[KEY_UI], ToggleBtn.MouseButton1Click:Connect(function()
     Shared.StompNearestEnabled=not Shared.StompNearestEnabled
-    refreshPill()
+    updateToggle()
     if Shared.SaveConfig then Shared.SaveConfig() end
 end))
 
 local sliderRow=Instance.new("Frame")
 sliderRow.BackgroundTransparency=1
-sliderRow.Position=UDim2.new(0,12,0,68)
+sliderRow.Position=UDim2.new(0,12,0,90)
 sliderRow.Size=UDim2.new(1,-24,0,40)
 sliderRow.Parent=panel
 
 local lblR=Instance.new("TextLabel")
 lblR.BackgroundTransparency=1
 lblR.Position=UDim2.new(0,0,0,0)
-lblR.Size=UDim2.new(0.28,0,1,0)
-lblR.Font=Enum.Font.GothamSemibold
+lblR.Size=UDim2.new(1,0,0,16)
+lblR.Font=Enum.Font.GothamBold
 lblR.Text=("Radius: %d"):format(Shared.StompRadius)
-lblR.TextColor3=Color3.new(1,1,1)
-lblR.TextSize=12
+lblR.TextColor3=Theme.Text
+lblR.TextSize=11
 lblR.TextXAlignment=Enum.TextXAlignment.Left
 lblR.Parent=sliderRow
 
-local bar=Instance.new("Frame")
-bar.BackgroundColor3=Color3.fromRGB(90,0,0)
-bar.Position=UDim2.new(0.30,12,0,13)
-bar.Size=UDim2.new(0.70,-24,0,14)
-bar.Parent=sliderRow
-local barC=Instance.new("UICorner",bar) barC.CornerRadius=UDim.new(0,8)
-local barS=Instance.new("UIStroke",bar) barS.Thickness=1 barS.Transparency=0.25 barS.Color=Color3.fromRGB(255,110,110)
+local Track=Instance.new("Frame")
+Track.BackgroundColor3=Theme.ToggleOff
+Track.Position=UDim2.new(0,0,0,22)
+Track.Size=UDim2.new(1,0,0,4)
+Track.BorderSizePixel=0
+Track.Parent=sliderRow
 
-local fill=Instance.new("Frame")
-fill.BackgroundColor3=Color3.fromRGB(185,0,0)
-fill.Size=UDim2.new((Shared.StompRadius/50),0,1,0)
-fill.Parent=bar
-local fillC=Instance.new("UICorner",fill) fillC.CornerRadius=UDim.new(0,8)
+local TrackCorner=Instance.new("UICorner",Track)
+TrackCorner.CornerRadius=UDim.new(1,0)
 
-local thumb=Instance.new("Frame")
-thumb.Size=UDim2.new(0,18,0,18)
-thumb.BackgroundColor3=Color3.fromRGB(255,150,150)
-thumb.Position=UDim2.new(Shared.StompRadius/50,-9,0.5,-9)
-thumb.Parent=bar
-local thC=Instance.new("UICorner",thumb) thC.CornerRadius=UDim.new(1,0)
-local thS=Instance.new("UIStroke",thumb) thS.Thickness=1 thS.Transparency=0.2 thS.Color=Color3.fromRGB(255,220,220)
+local Knob=Instance.new("Frame")
+Knob.Size=UDim2.new(0,12,0,12)
+Knob.BackgroundColor3=Theme.Accent
+Knob.Position=UDim2.new(Shared.StompRadius/50,-6,0.5,-6)
+Knob.BorderSizePixel=0
+Knob.Parent=Track
+
+local KnobCorner=Instance.new("UICorner",Knob)
+KnobCorner.CornerRadius=UDim.new(1,0)
 
 local hit=Instance.new("TextButton")
 hit.BackgroundTransparency=1
 hit.AutoButtonColor=false
 hit.Text=""
 hit.Size=UDim2.new(1,0,1,0)
-hit.Parent=bar
+hit.Parent=Track
 
 local sliding=false
 local function setRadius(v)
     Shared.StompRadius=math.clamp(math.floor(v+0.5),0,50)
     lblR.Text=("Radius: %d"):format(Shared.StompRadius)
     local r=(Shared.StompRadius/50)
-    fill.Size=UDim2.new(r,0,1,0)
-    thumb.Position=UDim2.new(r,-9,0.5,-9)
+    Knob.Position=UDim2.new(r,-6,0.5,-6)
     if Shared.SaveConfig then Shared.SaveConfig() end
 end
 local function posToRad(x)
-    local bx=bar.AbsolutePosition.X
-    local w=bar.AbsoluteSize.X
+    local bx=Track.AbsolutePosition.X
+    local w=Track.AbsoluteSize.X
     local u=(w>0) and math.clamp((x-bx)/w,0,1) or 0
     setRadius(u*50)
 end
@@ -328,10 +358,10 @@ local function endSlide() sliding=false end
 table.insert(Shared.Connections[KEY_UI], hit.InputBegan:Connect(function(i)
     if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then beginSlide(i.Position.X) end
 end))
-table.insert(Shared.Connections[KEY_UI], bar.InputBegan:Connect(function(i)
+table.insert(Shared.Connections[KEY_UI], Track.InputBegan:Connect(function(i)
     if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then beginSlide(i.Position.X) end
 end))
-table.insert(Shared.Connections[KEY_UI], thumb.InputBegan:Connect(function(i)
+table.insert(Shared.Connections[KEY_UI], Knob.InputBegan:Connect(function(i)
     if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then beginSlide(i.Position.X) end
 end))
 table.insert(Shared.Connections[KEY_UI], UserInputService.InputChanged:Connect(function(i)
@@ -345,7 +375,7 @@ end))
 local dragging=false
 local dragStart
 local startPos
-table.insert(Shared.Connections[KEY_UI], dragBar.InputBegan:Connect(function(i)
+table.insert(Shared.Connections[KEY_UI], HeaderFrame.InputBegan:Connect(function(i)
     if i.UserInputType==Enum.UserInputType.MouseButton1 then
         dragging=true
         dragStart=i.Position
@@ -375,7 +405,7 @@ for i=1,SEGMENTS do
     p.CanQuery=false
     p.CanTouch=false
     p.Material=Enum.Material.Neon
-    p.Color=Color3.new(1,1,1)
+    p.Color=Color3.fromRGB(220,0,0)
     p.Transparency=0.5
     p.Size=Vector3.new(THICK,THICK,0.2)
     p.TopSurface=Enum.SurfaceType.Smooth
