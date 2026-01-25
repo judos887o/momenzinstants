@@ -1,83 +1,109 @@
-local Players=game:GetService("Players")
-local ReplicatedStorage=game:GetService("ReplicatedStorage")
-local RunService=game:GetService("RunService")
-local UserInputService=game:GetService("UserInputService")
-local CoreGui=game:GetService("CoreGui")
-local Workspace=game:GetService("Workspace")
-local TweenService=game:GetService("TweenService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
 
-local LP=Players.LocalPlayer
-local MAINEVENT=ReplicatedStorage:FindFirstChild("MAINEVENT") or ReplicatedStorage:WaitForChild("MAINEVENT",5)
+local localPlayer = Players.LocalPlayer
+local MAINEVENT = ReplicatedStorage:FindFirstChild("MAINEVENT") or ReplicatedStorage:WaitForChild("MAINEVENT", 5)
 
-local Shared=getgenv().SchmecktHubPC or {}; getgenv().SchmecktHubPC=Shared
-Shared.Connections=Shared.Connections or {}
-Shared.StompRadius=math.clamp(Shared.StompRadius or 50,0,50)
-Shared.StompNearestEnabled=(Shared.StompNearestEnabled==true)
-Shared.InstantStompPanelPos=Shared.InstantStompPanelPos or UDim2.new(0,40,0,40)
+local Shared = getgenv().SchmecktHubPC or {}
+getgenv().SchmecktHubPC = Shared
+local key = "InstantStomp"
 
-if Shared.InstantStomp_Destroy then pcall(Shared.InstantStomp_Destroy) end
+Shared.Connections = Shared.Connections or {}
+Shared.StompRadius = math.clamp(Shared.StompRadius or 50, 0, 50)
+Shared.StompNearestEnabled = (Shared.StompNearestEnabled == true)
+Shared.InstantStompPanelPos = Shared.InstantStompPanelPos or UDim2.new(0, 40, 0, 40)
 
-local KEY_CORE="InstantStompCore"
-local KEY_UI="InstantStompUI"
-
-local function Discon(k)
-    if Shared.Connections[k] then for _,c in ipairs(Shared.Connections[k]) do pcall(function() c:Disconnect() end) end end
-    Shared.Connections[k]={}
-end
-
-Discon(KEY_CORE)
-Discon(KEY_UI)
-local oldUI=(CoreGui:FindFirstChild("Schmeckt_InstantStomp_UI") or (LP:FindFirstChildOfClass("PlayerGui") and LP.PlayerGui:FindFirstChild("Schmeckt_InstantStomp_UI")))
-if oldUI then oldUI:Destroy() end
-local oldRing=Workspace:FindFirstChild("Schmeckt_InstantStomp_Ring")
-if oldRing then oldRing:Destroy() end
-
-local function safeParent(g)
-    local ok=false
-    if syn and syn.protect_gui then pcall(function() syn.protect_gui(g); g.Parent=CoreGui; ok=true end) end
-    if not ok then ok=pcall(function() g.Parent=CoreGui end) end
-    if not ok then
-        local pg=LP:FindFirstChildOfClass("PlayerGui") or LP:WaitForChild("PlayerGui",3)
-        if pg then g.Parent=pg else g.Parent=CoreGui end
+if Shared.Connections[key] then
+    for _, c in pairs(Shared.Connections[key]) do
+        pcall(function() c:Disconnect() end)
     end
 end
+Shared.Connections[key] = {}
 
-local ANIM_ID="127290980842135"
-local TOUCH_RANGE=15
-local MIN_CD=0.05
-local lastStomp=0
+if localPlayer:WaitForChild("PlayerGui"):FindFirstChild("InstantStompGui") then
+    localPlayer.PlayerGui.InstantStompGui:Destroy()
+end
+local oldRing = Workspace:FindFirstChild("Schmeckt_InstantStomp_Ring")
+if oldRing then oldRing:Destroy() end
 
-local valid={["Head"]=true,["HumanoidRootPart"]=true,["Torso"]=true,["Left Leg"]=true,["Right Leg"]=true,["Left Arm"]=true,["Right Arm"]=true,["UpperTorso"]=true,["LowerTorso"]=true,["LeftUpperArm"]=true,["LeftLowerArm"]=true,["RightUpperArm"]=true,["RightLowerArm"]=true,["LeftHand"]=true,["RightHand"]=true,["LeftUpperLeg"]=true,["LeftLowerLeg"]=true,["RightUpperLeg"]=true,["RightLowerLeg"]=true,["LeftFoot"]=true,["RightFoot"]=true}
-local legParts={["LeftFoot"]=true,["RightFoot"]=true,["LeftLowerLeg"]=true,["RightLowerLeg"]=true,["LeftUpperLeg"]=true,["RightUpperLeg"]=true,["LeftLeg"]=true,["RightLeg"]=true}
+local Theme = {
+    Background = Color3.fromRGB(20, 5, 15),
+    Card = Color3.fromRGB(45, 12, 35),
+    Accent = Color3.fromRGB(255, 20, 147),
+    AccentSecondary = Color3.fromRGB(220, 20, 60),
+    Purple = Color3.fromRGB(180, 50, 255),
+    PurpleLight = Color3.fromRGB(220, 130, 255),
+    Text = Color3.fromRGB(255, 255, 255),
+    SubText = Color3.fromRGB(255, 150, 180),
+    Stroke = Color3.fromRGB(150, 30, 100),
+    StrokeLight = Color3.fromRGB(255, 105, 180),
+    Shadow = Color3.fromRGB(0, 0, 0),
+    Success = Color3.fromRGB(50, 255, 150),
+    Danger = Color3.fromRGB(255, 50, 80)
+}
+
+local LOGO_ASSET = "rbxassetid://121759217057084"
+local LOGO2_ASSET = "rbxassetid://118676632373972"
+
+local ANIM_ID = "127290980842135"
+local TOUCH_RANGE = 15
+local MIN_CD = 0.05
+local lastStomp = 0
+
+local valid = {
+    ["Head"] = true, ["HumanoidRootPart"] = true, ["Torso"] = true,
+    ["Left Leg"] = true, ["Right Leg"] = true, ["Left Arm"] = true, ["Right Arm"] = true,
+    ["UpperTorso"] = true, ["LowerTorso"] = true,
+    ["LeftUpperArm"] = true, ["LeftLowerArm"] = true, ["RightUpperArm"] = true, ["RightLowerArm"] = true,
+    ["LeftHand"] = true, ["RightHand"] = true,
+    ["LeftUpperLeg"] = true, ["LeftLowerLeg"] = true, ["RightUpperLeg"] = true, ["RightLowerLeg"] = true,
+    ["LeftFoot"] = true, ["RightFoot"] = true
+}
+
+local legParts = {
+    ["LeftFoot"] = true, ["RightFoot"] = true,
+    ["LeftLowerLeg"] = true, ["RightLowerLeg"] = true,
+    ["LeftUpperLeg"] = true, ["RightUpperLeg"] = true,
+    ["LeftLeg"] = true, ["RightLeg"] = true
+}
 
 local function findKOValue(ch)
-    local be=ch:FindFirstChild("BodyEffects")
-    local ko=be and (be:FindFirstChild("K.O") or be:FindFirstChild("KO") or be:FindFirstChild("Knocked"))
+    local be = ch:FindFirstChild("BodyEffects")
+    local ko = be and (be:FindFirstChild("K.O") or be:FindFirstChild("KO") or be:FindFirstChild("Knocked"))
     if ko and ko:IsA("BoolValue") then return ko end
-    ko=ch:FindFirstChild("K.O") or ch:FindFirstChild("KO") or ch:FindFirstChild("Knocked")
+    ko = ch:FindFirstChild("K.O") or ch:FindFirstChild("KO") or ch:FindFirstChild("Knocked")
     if ko and ko:IsA("BoolValue") then return ko end
-    for _,d in ipairs(ch:GetDescendants()) do
-        if (d.Name=="K.O" or d.Name=="KO" or d.Name=="Knocked") and d:IsA("BoolValue") then return d end
+    for _, d in ipairs(ch:GetDescendants()) do
+        if (d.Name == "K.O" or d.Name == "KO" or d.Name == "Knocked") and d:IsA("BoolValue") then return d end
     end
     return nil
 end
 
 local function isKO(p)
-    local ch=p and p.Character; if not ch then return false end
+    local ch = p and p.Character
+    if not ch then return false end
     if ch:FindFirstChildOfClass("ForceField") then return false end
-    local ko=findKOValue(ch)
-    if ko and ko.Value==true then
-        local be=ch:FindFirstChild("BodyEffects"); local dead=be and be:FindFirstChild("Dead")
-        if dead and dead.Value==true then return false end
-        local hum=ch:FindFirstChildOfClass("Humanoid"); if hum and hum.Health<=0 then return false end
+
+    local ko = findKOValue(ch)
+    if ko and ko.Value == true then
+        local be = ch:FindFirstChild("BodyEffects")
+        local dead = be and be:FindFirstChild("Dead")
+        if dead and dead.Value == true then return false end
+        local hum = ch:FindFirstChildOfClass("Humanoid")
+        if hum and hum.Health <= 0 then return false end
         return true
     end
-    local hum=ch:FindFirstChildOfClass("Humanoid")
+
+    local hum = ch:FindFirstChildOfClass("Humanoid")
     if hum then
-        if hum.Health > 20 then return false end 
+        if hum.Health > 20 then return false end
         if hum.Health <= 0 then return false end
-        local st=hum:GetState()
-        if st==Enum.HumanoidStateType.Ragdoll or st==Enum.HumanoidStateType.FallingDown or st==Enum.HumanoidStateType.Physics or hum.PlatformStand then
+        local st = hum:GetState()
+        if st == Enum.HumanoidStateType.Ragdoll or st == Enum.HumanoidStateType.FallingDown or st == Enum.HumanoidStateType.Physics or hum.PlatformStand then
             return true
         end
     end
@@ -85,371 +111,655 @@ local function isKO(p)
 end
 
 local function inRange(p)
-    local myCh=LP.Character; if not myCh then return false end
-    local myHRP=myCh:FindFirstChild("HumanoidRootPart"); if not myHRP then return false end
-    local ch=p and p.Character; if not ch then return false end
-    for _,part in ipairs(ch:GetChildren()) do
+    local myCh = localPlayer.Character
+    if not myCh then return false end
+    local myHRP = myCh:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return false end
+    local ch = p and p.Character
+    if not ch then return false end
+    for _, part in ipairs(ch:GetChildren()) do
         if part:IsA("BasePart") and valid[part.Name] then
-            if (myHRP.Position-part.Position).Magnitude<=TOUCH_RANGE then return true end
+            if (myHRP.Position - part.Position).Magnitude <= TOUCH_RANGE then return true end
         end
     end
     return false
 end
 
-local function nearestLeg(ch,ref)
-    local best,bestD
-    for _,p in ipairs(ch:GetChildren()) do
+local function nearestLeg(ch, ref)
+    local best, bestD
+    for _, p in ipairs(ch:GetChildren()) do
         if p:IsA("BasePart") and legParts[p.Name] then
-            local d=(ref-p.Position).Magnitude
-            if not bestD or d<bestD then best,bestD=p,d end
+            local d = (ref - p.Position).Magnitude
+            if not bestD or d < bestD then best, bestD = p, d end
         end
     end
-    return best,bestD
+    return best, bestD
 end
 
 local function getNearest(maxDist)
-    local myCh=LP.Character; if not myCh then return end
-    local hrp=myCh:FindFirstChild("HumanoidRootPart"); if not hrp then return end
-    local bestPlr,bestPart,bestDist=nil,nil,math.huge
-    for _,p in ipairs(Players:GetPlayers()) do
-        if p~=LP and isKO(p) then
-            local ch=p.Character
+    local myCh = localPlayer.Character
+    if not myCh then return end
+    local hrp = myCh:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    local bestPlr, bestPart, bestDist = nil, nil, math.huge
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= localPlayer and isKO(p) then
+            local ch = p.Character
             if ch then
-                local leg,d=nearestLeg(ch,hrp.Position)
+                local leg, d = nearestLeg(ch, hrp.Position)
                 if leg then
-                    local dd=(hrp.Position-leg.Position).Magnitude
-                    if dd<bestDist and dd<=maxDist then
-                        bestPlr,bestPart,bestDist=p,leg,dd
+                    local dd = (hrp.Position - leg.Position).Magnitude
+                    if dd < bestDist and dd <= maxDist then
+                        bestPlr, bestPart, bestDist = p, leg, dd
                     end
                 end
             end
         end
     end
-    return bestPlr,bestPart,bestDist
+    return bestPlr, bestPart, bestDist
 end
 
 local function hookAnim(ch)
     task.spawn(function()
-        local hum=ch:WaitForChild("Humanoid",5); if not hum then return end
-        local animator=hum:WaitForChild("Animator",5); if not animator then return end
-        table.insert(Shared.Connections[KEY_CORE], animator.AnimationPlayed:Connect(function(track)
-            local id=track.Animation and track.Animation.AnimationId or ""
+        local hum = ch:WaitForChild("Humanoid", 5)
+        if not hum then return end
+        local animator = hum:WaitForChild("Animator", 5)
+        if not animator then return end
+        table.insert(Shared.Connections[key], animator.AnimationPlayed:Connect(function(track)
+            local id = track.Animation and track.Animation.AnimationId or ""
             if tostring(id):find(ANIM_ID) then track:AdjustSpeed(100) end
         end))
     end)
 end
 
-table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(function()
-    local now=tick(); if now-lastStomp<MIN_CD then return end
-    local myCh=LP.Character; if not myCh then return end
-    local myHRP=myCh:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
-    for _,p in ipairs(Players:GetPlayers()) do
-        if p~=LP and isKO(p) and inRange(p) then
+table.insert(Shared.Connections[key], RunService.Heartbeat:Connect(function()
+    local now = tick()
+    if now - lastStomp < MIN_CD then return end
+    local myCh = localPlayer.Character
+    if not myCh then return end
+    local myHRP = myCh:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return end
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= localPlayer and isKO(p) and inRange(p) then
             if MAINEVENT then MAINEVENT:FireServer("STOMP") end
-            lastStomp=now
+            lastStomp = now
             return
         end
     end
 end))
 
-table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(function()
+table.insert(Shared.Connections[key], RunService.Heartbeat:Connect(function()
     if not Shared.StompNearestEnabled then return end
-    local myCh=LP.Character; if not myCh then return end
-    local myHRP=myCh:FindFirstChild("HumanoidRootPart"); if not myHRP then return end
-    local t,leg=getNearest(Shared.StompRadius)
+    local myCh = localPlayer.Character
+    if not myCh then return end
+    local myHRP = myCh:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return end
+    local t, leg = getNearest(Shared.StompRadius)
     if t and leg then
-        local thrp=t.Character and t.Character:FindFirstChild("HumanoidRootPart")
+        local thrp = t.Character and t.Character:FindFirstChild("HumanoidRootPart")
         if thrp then
-            local desired=leg.Position+Vector3.new(0,1.05,0.2)
-            myHRP.CFrame=CFrame.new(desired,thrp.Position)
+            local desired = leg.Position + Vector3.new(0, 1.05, 0.2)
+            myHRP.CFrame = CFrame.new(desired, thrp.Position)
         end
     end
 end))
 
-if LP.Character then hookAnim(LP.Character) end
-table.insert(Shared.Connections[KEY_CORE], LP.CharacterAdded:Connect(hookAnim))
+if localPlayer.Character then hookAnim(localPlayer.Character) end
+table.insert(Shared.Connections[key], localPlayer.CharacterAdded:Connect(hookAnim))
 
-local Theme = {
-    Background = Color3.fromRGB(15, 5, 5),
-    Accent = Color3.fromRGB(220, 0, 0),
-    ToggleOn = Color3.fromRGB(200, 0, 0),
-    ToggleOff = Color3.fromRGB(45, 10, 10),
-    Text = Color3.fromRGB(255, 255, 255),
-    SubText = Color3.fromRGB(255, 150, 150),
-    Stroke = Color3.fromRGB(80, 0, 0)
-}
 
-local gui=Instance.new("ScreenGui")
-gui.Name="Schmeckt_InstantStomp_UI"
-gui.IgnoreGuiInset=true
-gui.ResetOnSpawn=false
-gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
-safeParent(gui)
+local InstantStompGui = Instance.new("ScreenGui")
+InstantStompGui.Name = "InstantStompGui"
+InstantStompGui.ResetOnSpawn = false
+InstantStompGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+InstantStompGui.Parent = localPlayer:WaitForChild("PlayerGui")
 
-local panel=Instance.new("Frame")
-panel.Name="Panel"
-panel.AnchorPoint=Vector2.new(0,0)
-do
-    local pos=Shared.InstantStompPanelPos
-    if pos.X.Scale~=0 or pos.Y.Scale~=0 then
-        local cam=Workspace.CurrentCamera
-        if cam then
-            local px=pos.X.Scale*cam.ViewportSize.X+pos.X.Offset
-            local py=pos.Y.Scale*cam.ViewportSize.Y+pos.Y.Offset
-            pos=UDim2.new(0,math.floor(px),0,math.floor(py))
-            Shared.InstantStompPanelPos=pos
-        end
-    end
-    panel.Position=pos
-end
-panel.Size=UDim2.new(0,260,0,150)
-panel.BackgroundColor3=Theme.Background
-panel.BackgroundTransparency=0.05
-panel.BorderSizePixel=0
-panel.Parent=gui
+local MainShadow = Instance.new("Frame")
+MainShadow.Name = "Shadow"
+MainShadow.Size = UDim2.new(0, 250, 0, 160)
+MainShadow.Position = Shared.InstantStompPanelPos + UDim2.new(0, 5, 0, 5)
+MainShadow.BackgroundColor3 = Theme.Shadow
+MainShadow.BackgroundTransparency = 1
+MainShadow.BorderSizePixel = 0
+MainShadow.Parent = InstantStompGui
+Instance.new("UICorner", MainShadow).CornerRadius = UDim.new(0, 16)
 
-local pCorner=Instance.new("UICorner",panel) 
-pCorner.CornerRadius=UDim.new(0,12)
+local MainFrame = Instance.new("Frame")
+MainFrame.Name = "MainFrame"
+MainFrame.Size = UDim2.new(0, 240, 0, 150)
+MainFrame.Position = Shared.InstantStompPanelPos
+MainFrame.BackgroundColor3 = Theme.Background
+MainFrame.BackgroundTransparency = 1
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = InstantStompGui
 
-local pStroke=Instance.new("UIStroke",panel)
-pStroke.Thickness=1.5
-pStroke.Transparency=0.5
-pStroke.Color=Theme.Accent
+local MainCorner = Instance.new("UICorner")
+MainCorner.CornerRadius = UDim.new(0, 14)
+MainCorner.Parent = MainFrame
 
-local HeaderFrame=Instance.new("Frame")
-HeaderFrame.Name="Header"
-HeaderFrame.Size=UDim2.new(1,0,0,40)
-HeaderFrame.BackgroundColor3=Theme.ToggleOff
-HeaderFrame.BorderSizePixel=0
-HeaderFrame.Parent=panel
+local MainStroke = Instance.new("UIStroke")
+MainStroke.Thickness = 2
+MainStroke.Transparency = 1
+MainStroke.Parent = MainFrame
 
-local HeaderCorner=Instance.new("UICorner",HeaderFrame)
-HeaderCorner.CornerRadius=UDim.new(0,12)
+local mainStrokeGrad = Instance.new("UIGradient")
+mainStrokeGrad.Rotation = 90
+mainStrokeGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 20, 147)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(180, 50, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(220, 20, 60))
+})
+mainStrokeGrad.Parent = MainStroke
 
-local title=Instance.new("TextLabel")
-title.BackgroundTransparency=1
-title.Position=UDim2.new(0,12,0,0)
-title.Size=UDim2.new(1,-24,1,0)
-title.Font=Enum.Font.GothamBlack
-title.Text="INSTANT STOMP"
-title.TextColor3=Theme.Accent
-title.TextSize=11
-title.TextXAlignment=Enum.TextXAlignment.Left
-title.Parent=HeaderFrame
+local HeaderFrame = Instance.new("Frame")
+HeaderFrame.Name = "Header"
+HeaderFrame.Size = UDim2.new(1, 0, 0, 44)
+HeaderFrame.BackgroundColor3 = Theme.Card
+HeaderFrame.BorderSizePixel = 0
+HeaderFrame.Parent = MainFrame
+Instance.new("UICorner", HeaderFrame).CornerRadius = UDim.new(0, 14)
 
-local rowToggle=Instance.new("Frame")
-rowToggle.BackgroundTransparency=1
-rowToggle.Position=UDim2.new(0,12,0,50)
-rowToggle.Size=UDim2.new(1,-24,0,30)
-rowToggle.Parent=panel
+local headerGlow = Instance.new("Frame")
+headerGlow.Size = UDim2.new(1, 0, 1, 0)
+headerGlow.BackgroundColor3 = Theme.Purple
+headerGlow.BackgroundTransparency = 0.88
+headerGlow.BorderSizePixel = 0
+headerGlow.Parent = HeaderFrame
+Instance.new("UICorner", headerGlow).CornerRadius = UDim.new(0, 14)
 
-local lblT=Instance.new("TextLabel")
-lblT.BackgroundTransparency=1
-lblT.Position=UDim2.new(0,0,0,0)
-lblT.Size=UDim2.new(1,-50,1,0)
-lblT.Font=Enum.Font.GothamMedium
-lblT.Text="Stomp Nearest"
-lblT.TextColor3=Theme.Text
-lblT.TextSize=13
-lblT.TextXAlignment=Enum.TextXAlignment.Left
-lblT.Parent=rowToggle
+local hGlowGrad = Instance.new("UIGradient")
+hGlowGrad.Rotation = 0
+hGlowGrad.Transparency = NumberSequence.new({
+    NumberSequenceKeypoint.new(0, 0),
+    NumberSequenceKeypoint.new(1, 1)
+})
+hGlowGrad.Parent = headerGlow
 
-local SwitchBg=Instance.new("Frame")
-SwitchBg.Size=UDim2.new(0,36,0,20)
-SwitchBg.Position=UDim2.new(1,-40,0.5,-10)
-SwitchBg.BackgroundColor3=Shared.StompNearestEnabled and Theme.ToggleOn or Theme.ToggleOff
-SwitchBg.BorderSizePixel=0
-SwitchBg.Parent=rowToggle
+local HeaderLogo1 = Instance.new("ImageLabel")
+HeaderLogo1.Size = UDim2.new(0, 26, 0, 26)
+HeaderLogo1.Position = UDim2.new(0, 10, 0.5, -13)
+HeaderLogo1.BackgroundColor3 = Theme.Background
+HeaderLogo1.Image = LOGO_ASSET
+HeaderLogo1.ScaleType = Enum.ScaleType.Crop
+HeaderLogo1.ImageTransparency = 1
+HeaderLogo1.Parent = HeaderFrame
+Instance.new("UICorner", HeaderLogo1).CornerRadius = UDim.new(0, 6)
 
-local SwCorner=Instance.new("UICorner",SwitchBg)
-SwCorner.CornerRadius=UDim.new(1,0)
+local HeaderX = Instance.new("TextLabel")
+HeaderX.Size = UDim2.new(0, 14, 0, 26)
+HeaderX.Position = UDim2.new(0, 38, 0.5, -13)
+HeaderX.BackgroundTransparency = 1
+HeaderX.Text = "✕"
+HeaderX.Font = Enum.Font.GothamBlack
+HeaderX.TextSize = 10
+HeaderX.TextColor3 = Theme.Purple
+HeaderX.TextTransparency = 1
+HeaderX.Parent = HeaderFrame
 
-local Circle=Instance.new("Frame")
-Circle.Size=UDim2.new(0,16,0,16)
-local startX=Shared.StompNearestEnabled and 18 or 2
-Circle.Position=UDim2.new(0,startX,0.5,-8)
-Circle.BackgroundColor3=Color3.fromRGB(255,255,255)
-Circle.BorderSizePixel=0
-Circle.Parent=SwitchBg
+local headerXGrad = Instance.new("UIGradient")
+headerXGrad.Rotation = 45
+headerXGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(180, 50, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(220, 130, 255))
+})
+headerXGrad.Parent = HeaderX
 
-local CCorner=Instance.new("UICorner",Circle)
-CCorner.CornerRadius=UDim.new(1,0)
+local HeaderLogo2 = Instance.new("ImageLabel")
+HeaderLogo2.Size = UDim2.new(0, 22, 0, 22)
+HeaderLogo2.Position = UDim2.new(0, 54, 0.5, -11)
+HeaderLogo2.BackgroundTransparency = 1
+HeaderLogo2.Image = LOGO2_ASSET
+HeaderLogo2.ScaleType = Enum.ScaleType.Fit
+HeaderLogo2.ImageTransparency = 1
+HeaderLogo2.Parent = HeaderFrame
+Instance.new("UICorner", HeaderLogo2).CornerRadius = UDim.new(1, 0)
 
-local ToggleBtn=Instance.new("TextButton")
-ToggleBtn.Size=UDim2.new(1,0,1,0)
-ToggleBtn.BackgroundTransparency=1
-ToggleBtn.Text=""
-ToggleBtn.Parent=rowToggle
+local HeaderText = Instance.new("TextLabel")
+HeaderText.Size = UDim2.new(1, -90, 0, 16)
+HeaderText.Position = UDim2.new(0, 82, 0, 6)
+HeaderText.BackgroundTransparency = 1
+HeaderText.Text = "INSTANT STOMP"
+HeaderText.Font = Enum.Font.GothamBlack
+HeaderText.TextSize = 11
+HeaderText.TextColor3 = Theme.Accent
+HeaderText.TextXAlignment = Enum.TextXAlignment.Left
+HeaderText.TextTransparency = 1
+HeaderText.Parent = HeaderFrame
+
+local headerTextGrad = Instance.new("UIGradient")
+headerTextGrad.Rotation = 0
+headerTextGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 20, 147)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(180, 50, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 105, 180))
+})
+headerTextGrad.Parent = HeaderText
+
+local HeaderSub = Instance.new("TextLabel")
+HeaderSub.Size = UDim2.new(1, -90, 0, 12)
+HeaderSub.Position = UDim2.new(0, 82, 0, 24)
+HeaderSub.BackgroundTransparency = 1
+HeaderSub.Text = "Meulios ✕ ShadowPepper"
+HeaderSub.Font = Enum.Font.GothamMedium
+HeaderSub.TextSize = 8
+HeaderSub.TextColor3 = Theme.SubText
+HeaderSub.TextXAlignment = Enum.TextXAlignment.Left
+HeaderSub.TextTransparency = 1
+HeaderSub.Parent = HeaderFrame
+
+local subGrad = Instance.new("UIGradient")
+subGrad.Rotation = -45
+subGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 150, 180)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(220, 130, 255)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 105, 180))
+})
+subGrad.Parent = HeaderSub
+
+local ContentFrame = Instance.new("Frame")
+ContentFrame.Name = "Content"
+ContentFrame.Size = UDim2.new(1, -16, 0, 90)
+ContentFrame.Position = UDim2.new(0, 8, 0, 52)
+ContentFrame.BackgroundTransparency = 1
+ContentFrame.Parent = MainFrame
+
+local ToggleRow = Instance.new("Frame")
+ToggleRow.Name = "ToggleRow"
+ToggleRow.Size = UDim2.new(1, 0, 0, 28)
+ToggleRow.Position = UDim2.new(0, 0, 0, 0)
+ToggleRow.BackgroundTransparency = 1
+ToggleRow.Parent = ContentFrame
+
+local ToggleLabel = Instance.new("TextLabel")
+ToggleLabel.Size = UDim2.new(0.6, 0, 1, 0)
+ToggleLabel.Position = UDim2.new(0, 0, 0, 0)
+ToggleLabel.BackgroundTransparency = 1
+ToggleLabel.Text = "Stomp Nearest"
+ToggleLabel.Font = Enum.Font.GothamBold
+ToggleLabel.TextSize = 12
+ToggleLabel.TextColor3 = Theme.Text
+ToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+ToggleLabel.TextTransparency = 1
+ToggleLabel.Parent = ToggleRow
+
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Name = "Toggle"
+ToggleButton.AnchorPoint = Vector2.new(1, 0.5)
+ToggleButton.Position = UDim2.new(1, 0, 0.5, 0)
+ToggleButton.Size = UDim2.new(0, 70, 0, 24)
+ToggleButton.BackgroundColor3 = Shared.StompNearestEnabled and Theme.Success or Theme.Danger
+ToggleButton.BackgroundTransparency = 1
+ToggleButton.Font = Enum.Font.GothamBlack
+ToggleButton.TextSize = 10
+ToggleButton.Text = Shared.StompNearestEnabled and "ON" or "OFF"
+ToggleButton.TextColor3 = Theme.Text
+ToggleButton.TextTransparency = 1
+ToggleButton.AutoButtonColor = false
+ToggleButton.Parent = ToggleRow
+Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 999)
+
+local toggleStroke = Instance.new("UIStroke")
+toggleStroke.Thickness = 1.5
+toggleStroke.Transparency = 1
+toggleStroke.Color = Theme.StrokeLight
+toggleStroke.Parent = ToggleButton
+
+local toggleGrad = Instance.new("UIGradient")
+toggleGrad.Rotation = 45
+toggleGrad.Parent = ToggleButton
 
 local function updateToggle()
-    local targetX=Shared.StompNearestEnabled and 18 or 2
-    local targetColor=Shared.StompNearestEnabled and Theme.ToggleOn or Theme.ToggleOff
-    TweenService:Create(Circle,TweenInfo.new(0.2),{Position=UDim2.new(0,targetX,0.5,-8)}):Play()
-    TweenService:Create(SwitchBg,TweenInfo.new(0.2),{BackgroundColor3=targetColor}):Play()
+    local on = Shared.StompNearestEnabled
+    ToggleButton.Text = on and "ON" or "OFF"
+    toggleGrad.Color = on and ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 255, 150)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 255, 200))
+    }) or ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 50, 80)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 20, 147))
+    })
 end
+updateToggle()
 
-table.insert(Shared.Connections[KEY_UI], ToggleBtn.MouseButton1Click:Connect(function()
-    Shared.StompNearestEnabled=not Shared.StompNearestEnabled
+table.insert(Shared.Connections[key], ToggleButton.MouseButton1Click:Connect(function()
+    Shared.StompNearestEnabled = not Shared.StompNearestEnabled
     updateToggle()
     if Shared.SaveConfig then Shared.SaveConfig() end
 end))
 
-local sliderRow=Instance.new("Frame")
-sliderRow.BackgroundTransparency=1
-sliderRow.Position=UDim2.new(0,12,0,90)
-sliderRow.Size=UDim2.new(1,-24,0,40)
-sliderRow.Parent=panel
+local SliderRow = Instance.new("Frame")
+SliderRow.Name = "SliderRow"
+SliderRow.Size = UDim2.new(1, 0, 0, 40)
+SliderRow.Position = UDim2.new(0, 0, 0, 36)
+SliderRow.BackgroundTransparency = 1
+SliderRow.Parent = ContentFrame
 
-local lblR=Instance.new("TextLabel")
-lblR.BackgroundTransparency=1
-lblR.Position=UDim2.new(0,0,0,0)
-lblR.Size=UDim2.new(1,0,0,16)
-lblR.Font=Enum.Font.GothamBold
-lblR.Text=("Radius: %d"):format(Shared.StompRadius)
-lblR.TextColor3=Theme.Text
-lblR.TextSize=11
-lblR.TextXAlignment=Enum.TextXAlignment.Left
-lblR.Parent=sliderRow
+local RadiusLabel = Instance.new("TextLabel")
+RadiusLabel.Name = "RadiusLabel"
+RadiusLabel.Size = UDim2.new(0.35, 0, 0, 20)
+RadiusLabel.Position = UDim2.new(0, 0, 0, 0)
+RadiusLabel.BackgroundTransparency = 1
+RadiusLabel.Text = string.format("Radius: %d", Shared.StompRadius)
+RadiusLabel.Font = Enum.Font.GothamBold
+RadiusLabel.TextSize = 11
+RadiusLabel.TextColor3 = Theme.Text
+RadiusLabel.TextXAlignment = Enum.TextXAlignment.Left
+RadiusLabel.TextTransparency = 1
+RadiusLabel.Parent = SliderRow
 
-local Track=Instance.new("Frame")
-Track.BackgroundColor3=Theme.ToggleOff
-Track.Position=UDim2.new(0,0,0,22)
-Track.Size=UDim2.new(1,0,0,4)
-Track.BorderSizePixel=0
-Track.Parent=sliderRow
+local SliderBar = Instance.new("Frame")
+SliderBar.Name = "SliderBar"
+SliderBar.Size = UDim2.new(0.62, 0, 0, 10)
+SliderBar.Position = UDim2.new(0.38, 0, 0, 5)
+SliderBar.BackgroundColor3 = Theme.Card
+SliderBar.BackgroundTransparency = 1
+SliderBar.Parent = SliderRow
+Instance.new("UICorner", SliderBar).CornerRadius = UDim.new(0, 6)
 
-local TrackCorner=Instance.new("UICorner",Track)
-TrackCorner.CornerRadius=UDim.new(1,0)
+local sliderBarStroke = Instance.new("UIStroke")
+sliderBarStroke.Thickness = 1
+sliderBarStroke.Transparency = 1
+sliderBarStroke.Color = Theme.Stroke
+sliderBarStroke.Parent = SliderBar
 
-local Knob=Instance.new("Frame")
-Knob.Size=UDim2.new(0,12,0,12)
-Knob.BackgroundColor3=Theme.Accent
-Knob.Position=UDim2.new(Shared.StompRadius/50,-6,0.5,-6)
-Knob.BorderSizePixel=0
-Knob.Parent=Track
+local SliderFill = Instance.new("Frame")
+SliderFill.Name = "Fill"
+SliderFill.Size = UDim2.new(Shared.StompRadius / 50, 0, 1, 0)
+SliderFill.BackgroundColor3 = Theme.Purple
+SliderFill.BackgroundTransparency = 1
+SliderFill.Parent = SliderBar
+Instance.new("UICorner", SliderFill).CornerRadius = UDim.new(0, 6)
 
-local KnobCorner=Instance.new("UICorner",Knob)
-KnobCorner.CornerRadius=UDim.new(1,0)
+local sliderFillGrad = Instance.new("UIGradient")
+sliderFillGrad.Rotation = 0
+sliderFillGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 20, 147)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 50, 255))
+})
+sliderFillGrad.Parent = SliderFill
 
-local hit=Instance.new("TextButton")
-hit.BackgroundTransparency=1
-hit.AutoButtonColor=false
-hit.Text=""
-hit.Size=UDim2.new(1,0,1,0)
-hit.Parent=Track
+local SliderThumb = Instance.new("Frame")
+SliderThumb.Name = "Thumb"
+SliderThumb.Size = UDim2.new(0, 16, 0, 16)
+SliderThumb.Position = UDim2.new(Shared.StompRadius / 50, -8, 0.5, -8)
+SliderThumb.BackgroundColor3 = Theme.PurpleLight
+SliderThumb.BackgroundTransparency = 1
+SliderThumb.Parent = SliderBar
+Instance.new("UICorner", SliderThumb).CornerRadius = UDim.new(1, 0)
 
-local sliding=false
+local thumbStroke = Instance.new("UIStroke")
+thumbStroke.Thickness = 2
+thumbStroke.Transparency = 1
+thumbStroke.Color = Theme.Purple
+thumbStroke.Parent = SliderThumb
+
+local SliderHit = Instance.new("TextButton")
+SliderHit.BackgroundTransparency = 1
+SliderHit.AutoButtonColor = false
+SliderHit.Text = ""
+SliderHit.Size = UDim2.new(1, 20, 1, 20)
+SliderHit.Position = UDim2.new(0, -10, 0, -10)
+SliderHit.Parent = SliderBar
+
+local sliding = false
+
 local function setRadius(v)
-    Shared.StompRadius=math.clamp(math.floor(v+0.5),0,50)
-    lblR.Text=("Radius: %d"):format(Shared.StompRadius)
-    local r=(Shared.StompRadius/50)
-    Knob.Position=UDim2.new(r,-6,0.5,-6)
+    Shared.StompRadius = math.clamp(math.floor(v + 0.5), 0, 50)
+    RadiusLabel.Text = string.format("Radius: %d", Shared.StompRadius)
+    local r = Shared.StompRadius / 50
+    SliderFill.Size = UDim2.new(r, 0, 1, 0)
+    SliderThumb.Position = UDim2.new(r, -8, 0.5, -8)
     if Shared.SaveConfig then Shared.SaveConfig() end
 end
+
 local function posToRad(x)
-    local bx=Track.AbsolutePosition.X
-    local w=Track.AbsoluteSize.X
-    local u=(w>0) and math.clamp((x-bx)/w,0,1) or 0
-    setRadius(u*50)
+    local bx = SliderBar.AbsolutePosition.X
+    local w = SliderBar.AbsoluteSize.X
+    local u = (w > 0) and math.clamp((x - bx) / w, 0, 1) or 0
+    setRadius(u * 50)
 end
-local function beginSlide(x) sliding=true; posToRad(x) end
-local function endSlide() sliding=false end
 
-table.insert(Shared.Connections[KEY_UI], hit.InputBegan:Connect(function(i)
-    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then beginSlide(i.Position.X) end
+table.insert(Shared.Connections[key], SliderHit.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+        sliding = true
+        posToRad(i.Position.X)
+    end
 end))
-table.insert(Shared.Connections[KEY_UI], Track.InputBegan:Connect(function(i)
-    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then beginSlide(i.Position.X) end
-end))
-table.insert(Shared.Connections[KEY_UI], Knob.InputBegan:Connect(function(i)
-    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then beginSlide(i.Position.X) end
-end))
-table.insert(Shared.Connections[KEY_UI], UserInputService.InputChanged:Connect(function(i)
+
+table.insert(Shared.Connections[key], UserInputService.InputChanged:Connect(function(i)
     if not sliding then return end
-    if i.UserInputType==Enum.UserInputType.MouseMovement or i.UserInputType==Enum.UserInputType.Touch then posToRad(i.Position.X) end
-end))
-table.insert(Shared.Connections[KEY_UI], UserInputService.InputEnded:Connect(function(i)
-    if i.UserInputType==Enum.UserInputType.MouseButton1 or i.UserInputType==Enum.UserInputType.Touch then endSlide() end
-end))
-
-local dragging=false
-local dragStart
-local startPos
-table.insert(Shared.Connections[KEY_UI], HeaderFrame.InputBegan:Connect(function(i)
-    if i.UserInputType==Enum.UserInputType.MouseButton1 then
-        dragging=true
-        dragStart=i.Position
-        startPos=panel.Position
-        i.Changed:Connect(function() if i.UserInputState==Enum.UserInputState.End then dragging=false end end)
-    end
-end))
-table.insert(Shared.Connections[KEY_UI], UserInputService.InputChanged:Connect(function(i)
-    if not dragging then return end
-    if i.UserInputType==Enum.UserInputType.MouseMovement then
-        local d=i.Position-dragStart
-        panel.Position=UDim2.new(0,startPos.X.Offset+d.X,0,startPos.Y.Offset+d.Y)
-        Shared.InstantStompPanelPos=panel.Position
+    if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then
+        posToRad(i.Position.X)
     end
 end))
 
-local ringFolder=Instance.new("Folder"); ringFolder.Name="Schmeckt_InstantStomp_Ring"; ringFolder.Parent=Workspace
-local SEGMENTS=64
-local THICK=0.08
-local YOFFSET=0.03
-local segments={}
-for i=1,SEGMENTS do
-    local p=Instance.new("Part")
-    p.Name="Seg"..i
-    p.Anchored=true
-    p.CanCollide=false
-    p.CanQuery=false
-    p.CanTouch=false
-    p.Material=Enum.Material.Neon
-    p.Color=Color3.fromRGB(220,0,0)
-    p.Transparency=0.5
-    p.Size=Vector3.new(THICK,THICK,0.2)
-    p.TopSurface=Enum.SurfaceType.Smooth
-    p.BottomSurface=Enum.SurfaceType.Smooth
-    p.Parent=ringFolder
-    segments[i]=p
+table.insert(Shared.Connections[key], UserInputService.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+        sliding = false
+    end
+end))
+
+
+local dragging, dragInput, dragStart, startPos, shadowStartPos
+
+HeaderFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = MainFrame.Position
+        shadowStartPos = MainShadow.Position
+    end
+end)
+
+HeaderFrame.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+        dragInput = input
+    end
+end)
+
+table.insert(Shared.Connections[key], UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then
+        local delta = input.Position - dragStart
+        local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        MainFrame.Position = newPos
+        MainShadow.Position = UDim2.new(shadowStartPos.X.Scale, shadowStartPos.X.Offset + delta.X, shadowStartPos.Y.Scale, shadowStartPos.Y.Offset + delta.Y)
+        Shared.InstantStompPanelPos = newPos
+    end
+end))
+
+table.insert(Shared.Connections[key], UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end))
+
+
+local ringFolder = Instance.new("Folder")
+ringFolder.Name = "Schmeckt_InstantStomp_Ring"
+ringFolder.Parent = Workspace
+
+local SEGMENTS = 64
+local THICK = 0.08
+local YOFFSET = 0.03
+local segments = {}
+
+for i = 1, SEGMENTS do
+    local p = Instance.new("Part")
+    p.Name = "Seg" .. i
+    p.Anchored = true
+    p.CanCollide = false
+    p.CanQuery = false
+    p.CanTouch = false
+    p.Material = Enum.Material.Neon
+    p.Color = Theme.Purple
+    p.Transparency = 1
+    p.Size = Vector3.new(THICK, THICK, 0.2)
+    p.TopSurface = Enum.SurfaceType.Smooth
+    p.BottomSurface = Enum.SurfaceType.Smooth
+    p.Parent = ringFolder
+    segments[i] = p
 end
 
-local rcParams=RaycastParams.new()
-rcParams.FilterType=Enum.RaycastFilterType.Exclude
-rcParams.IgnoreWater=true
+local rcParams = RaycastParams.new()
+rcParams.FilterType = Enum.RaycastFilterType.Exclude
+rcParams.IgnoreWater = true
 
-local function updateRing()
-    local ch=LP.Character
-    local hrp=ch and ch:FindFirstChild("HumanoidRootPart")
+local ringColorPhase = 0
+
+local function updateRing(dt)
+    local ch = localPlayer.Character
+    local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
-    rcParams.FilterDescendantsInstances={ch}
-    local res=Workspace:Raycast(hrp.Position,Vector3.new(0,-100,0),rcParams)
-    local center=(res and res.Position or (hrp.Position-Vector3.new(0,3,0)))+Vector3.new(0,YOFFSET,0)
-    local r=Shared.StompRadius
-    local vis=Shared.StompNearestEnabled
-    local twoPi=math.pi*2
-    for i=1,SEGMENTS do
-        local a1=twoPi*(i-1)/SEGMENTS
-        local a2=twoPi*(i)/SEGMENTS
-        local p1=center+Vector3.new(math.cos(a1)*r,0,math.sin(a1)*r)
-        local p2=center+Vector3.new(math.cos(a2)*r,0,math.sin(a2)*r)
-        local mid=(p1+p2)/2
-        local dir=(p2-p1)
-        local len=math.max(dir.Magnitude,1e-4)
-        local cf=CFrame.lookAt(mid, mid+dir, Vector3.yAxis)
-        local part=segments[i]
-        part.Size=Vector3.new(THICK,THICK,len)
-        part.CFrame=cf
-        part.Transparency=vis and 0.5 or 1
+    
+    rcParams.FilterDescendantsInstances = {ch}
+    local res = Workspace:Raycast(hrp.Position, Vector3.new(0, -100, 0), rcParams)
+    local center = (res and res.Position or (hrp.Position - Vector3.new(0, 3, 0))) + Vector3.new(0, YOFFSET, 0)
+    local r = Shared.StompRadius
+    local vis = Shared.StompNearestEnabled
+    local twoPi = math.pi * 2
+    
+    ringColorPhase = (ringColorPhase + dt * 0.5) % 1
+    
+    for i = 1, SEGMENTS do
+        local a1 = twoPi * (i - 1) / SEGMENTS
+        local a2 = twoPi * i / SEGMENTS
+        local p1 = center + Vector3.new(math.cos(a1) * r, 0, math.sin(a1) * r)
+        local p2 = center + Vector3.new(math.cos(a2) * r, 0, math.sin(a2) * r)
+        local mid = (p1 + p2) / 2
+        local dir = (p2 - p1)
+        local len = math.max(dir.Magnitude, 1e-4)
+        local cf = CFrame.lookAt(mid, mid + dir, Vector3.yAxis)
+        local part = segments[i]
+        part.Size = Vector3.new(THICK, THICK, len)
+        part.CFrame = cf
+        part.Transparency = vis and 0.4 or 1
+        
+        if vis then
+            local segPhase = (ringColorPhase + i / SEGMENTS) % 1
+            local colors = {
+                Color3.fromRGB(255, 20, 147),
+                Color3.fromRGB(220, 20, 60),
+                Color3.fromRGB(180, 50, 255),
+                Color3.fromRGB(255, 105, 180),
+            }
+            local index = math.floor(segPhase * #colors) + 1
+            local nextIndex = (index % #colors) + 1
+            local localT = (segPhase * #colors) % 1
+            part.Color = colors[index]:Lerp(colors[nextIndex], localT)
+        end
     end
 end
-table.insert(Shared.Connections[KEY_CORE], RunService.Heartbeat:Connect(updateRing))
+
+table.insert(Shared.Connections[key], RunService.Heartbeat:Connect(updateRing))
+
+
+local mainColorPhase = 0
+local mainColorConnection = RunService.Heartbeat:Connect(function(dt)
+    if not MainFrame.Parent then
+        mainColorConnection:Disconnect()
+        return
+    end
+    
+    mainColorPhase = (mainColorPhase + dt * 0.6) % 1
+    
+    local function lerpColor(t)
+        local colors = {
+            Color3.fromRGB(255, 20, 147),
+            Color3.fromRGB(220, 20, 60),
+            Color3.fromRGB(180, 50, 255),
+            Color3.fromRGB(255, 105, 180),
+        }
+        local index = math.floor(t * #colors) + 1
+        local nextIndex = (index % #colors) + 1
+        local localT = (t * #colors) % 1
+        return colors[index]:Lerp(colors[nextIndex], localT)
+    end
+    
+    local o1 = mainColorPhase
+    local o2 = (mainColorPhase + 0.33) % 1
+    local o3 = (mainColorPhase + 0.66) % 1
+    
+    mainStrokeGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, lerpColor(o1)),
+        ColorSequenceKeypoint.new(0.5, lerpColor(o2)),
+        ColorSequenceKeypoint.new(1, lerpColor(o3))
+    })
+    
+    headerTextGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, lerpColor(o1)),
+        ColorSequenceKeypoint.new(0.5, lerpColor(o2)),
+        ColorSequenceKeypoint.new(1, lerpColor(o3))
+    })
+    
+    headerXGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, lerpColor(o2)),
+        ColorSequenceKeypoint.new(1, lerpColor(o3))
+    })
+    
+    subGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, lerpColor(o2):Lerp(Color3.new(1, 1, 1), 0.3)),
+        ColorSequenceKeypoint.new(0.5, lerpColor(o3)),
+        ColorSequenceKeypoint.new(1, lerpColor(o1):Lerp(Color3.new(1, 1, 1), 0.3))
+    })
+    
+    sliderFillGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, lerpColor(o1)),
+        ColorSequenceKeypoint.new(1, lerpColor(o2))
+    })
+end)
+table.insert(Shared.Connections[key], mainColorConnection)
+
+
+MainFrame.Size = UDim2.new(0, 0, 0, 0)
+MainShadow.Size = UDim2.new(0, 0, 0, 0)
+
+local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+local fadeTween = TweenInfo.new(0.5, Enum.EasingStyle.Quad)
+
+TweenService:Create(MainFrame, tweenInfo, {Size = UDim2.new(0, 240, 0, 150), BackgroundTransparency = 0.02}):Play()
+TweenService:Create(MainShadow, tweenInfo, {Size = UDim2.new(0, 250, 0, 160)}):Play()
+TweenService:Create(MainShadow, fadeTween, {BackgroundTransparency = 0.5}):Play()
+TweenService:Create(MainStroke, fadeTween, {Transparency = 0}):Play()
+TweenService:Create(HeaderLogo1, fadeTween, {ImageTransparency = 0}):Play()
+TweenService:Create(HeaderLogo2, fadeTween, {ImageTransparency = 0}):Play()
+TweenService:Create(HeaderX, fadeTween, {TextTransparency = 0}):Play()
+TweenService:Create(HeaderText, fadeTween, {TextTransparency = 0}):Play()
+TweenService:Create(HeaderSub, fadeTween, {TextTransparency = 0}):Play()
+TweenService:Create(ToggleLabel, fadeTween, {TextTransparency = 0}):Play()
+TweenService:Create(ToggleButton, fadeTween, {BackgroundTransparency = 0, TextTransparency = 0}):Play()
+TweenService:Create(toggleStroke, fadeTween, {Transparency = 0}):Play()
+TweenService:Create(RadiusLabel, fadeTween, {TextTransparency = 0}):Play()
+TweenService:Create(SliderBar, fadeTween, {BackgroundTransparency = 0}):Play()
+TweenService:Create(sliderBarStroke, fadeTween, {Transparency = 0}):Play()
+TweenService:Create(SliderFill, fadeTween, {BackgroundTransparency = 0}):Play()
+TweenService:Create(SliderThumb, fadeTween, {BackgroundTransparency = 0}):Play()
+TweenService:Create(thumbStroke, fadeTween, {Transparency = 0}):Play()
+
 
 local function destroyAll()
-    Discon(KEY_CORE); Discon(KEY_UI)
-    local g=(CoreGui:FindFirstChild("Schmeckt_InstantStomp_UI") or (LP:FindFirstChildOfClass("PlayerGui") and LP.PlayerGui:FindFirstChild("Schmeckt_InstantStomp_UI")))
-    if g then pcall(function() g:Destroy() end) end
-    local rf=Workspace:FindFirstChild("Schmeckt_InstantStomp_Ring")
-    if rf then pcall(function() rf:Destroy() end) end
+    if Shared.Connections[key] then
+        for _, c in pairs(Shared.Connections[key]) do
+            pcall(function() c:Disconnect() end)
+        end
+        Shared.Connections[key] = {}
+    end
+    
+    if InstantStompGui then
+        pcall(function() InstantStompGui:Destroy() end)
+    end
+    
+    local rf = Workspace:FindFirstChild("Schmeckt_InstantStomp_Ring")
+    if rf then
+        pcall(function() rf:Destroy() end)
+    end
 end
-Shared.InstantStomp_Destroy=destroyAll
+
+Shared.InstantStomp_Destroy = destroyAll
+
+local cleanupListener = RunService.RenderStepped:Connect(function()
+    if not Shared.InstantStomp then
+        destroyAll()
+        cleanupListener:Disconnect()
+    end
+end)
+table.insert(Shared.Connections[key], cleanupListener)
