@@ -4,6 +4,7 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
+local SoundService = game:GetService("SoundService")
 
 local localPlayer = Players.LocalPlayer
 local MAINEVENT = ReplicatedStorage:FindFirstChild("MAINEVENT") or ReplicatedStorage:WaitForChild("MAINEVENT", 5)
@@ -12,23 +13,33 @@ local Shared = getgenv().SchmecktHubPC or {}
 getgenv().SchmecktHubPC = Shared
 local key = "InstantStomp"
 
-local SCALE = 1
-if Shared.Platform == "Mobile" then
-    SCALE = 1 / 2.2
+local IS_MOBILE = Shared.Platform == "Mobile" or UserInputService.TouchEnabled
+local SCALE = IS_MOBILE and 0.5 or 1
+
+local function s(v) return math.floor(v * SCALE) end
+
+local CLICK_SOUND_ID = "rbxassetid://100809160609628"
+local INTRO_LOGO_ASSET = "rbxassetid://121759217057084"
+
+local clickSound = SoundService:FindFirstChild("SchmecktClickSound")
+if not clickSound then
+    clickSound = Instance.new("Sound")
+    clickSound.Name = "SchmecktClickSound"
+    clickSound.SoundId = CLICK_SOUND_ID
+    clickSound.Volume = 0.5
+    clickSound.Parent = SoundService
 end
 
-local function scaleUDim(x, y)
-    return UDim2.new(0, x * SCALE, 0, y * SCALE)
-end
-
-local function scaleSize(s)
-    return math.floor(s * SCALE)
+local function playClick()
+    task.spawn(function()
+        pcall(function() clickSound:Stop() clickSound:Play() end)
+    end)
 end
 
 Shared.Connections = Shared.Connections or {}
 Shared.StompRadius = math.clamp(Shared.StompRadius or 50, 0, 50)
 Shared.StompNearestEnabled = (Shared.StompNearestEnabled == true)
-Shared.InstantStompPanelPos = Shared.InstantStompPanelPos or UDim2.new(0, 40, 0, 40)
+Shared.InstantStompPanelPos = Shared.InstantStompPanelPos or UDim2.new(0, s(40), 0, s(40))
 
 if Shared.Connections[key] then
     for _, c in pairs(Shared.Connections[key]) do
@@ -43,23 +54,39 @@ end
 local oldRing = Workspace:FindFirstChild("Schmeckt_InstantStomp_Ring")
 if oldRing then oldRing:Destroy() end
 
-local Theme = {
-    Background = Color3.fromRGB(20, 5, 15),
-    Card = Color3.fromRGB(45, 12, 35),
-    Accent = Color3.fromRGB(255, 20, 147),
-    Purple = Color3.fromRGB(180, 50, 255),
-    PurpleLight = Color3.fromRGB(220, 130, 255),
+local COL = {
+    BgMain = Color3.fromRGB(90, 0, 0),
+    BgTop = Color3.fromRGB(140, 0, 0),
+    BgInner = Color3.fromRGB(120, 0, 0),
+    Card = Color3.fromRGB(135, 0, 0),
+    Stroke1 = Color3.fromRGB(255, 110, 110),
+    Stroke2 = Color3.fromRGB(255, 150, 150),
     Text = Color3.fromRGB(255, 255, 255),
-    SubText = Color3.fromRGB(255, 150, 180),
-    Stroke = Color3.fromRGB(150, 30, 100),
-    StrokeLight = Color3.fromRGB(255, 105, 180),
-    Shadow = Color3.fromRGB(0, 0, 0),
-    Success = Color3.fromRGB(50, 255, 150),
-    Danger = Color3.fromRGB(255, 50, 80)
+    DevText = Color3.fromRGB(200, 160, 160),
+    SubText = Color3.fromRGB(255, 210, 210),
+    ToggleOff = Color3.fromRGB(175, 50, 120),
+    ToggleOn = Color3.fromRGB(220, 70, 160),
+    SliderBg = Color3.fromRGB(110, 0, 0),
+    SliderFill = Color3.fromRGB(220, 70, 160),
+    SliderThumb = Color3.fromRGB(255, 150, 150),
+    Ring = Color3.fromRGB(255, 80, 80),
 }
 
-local LOGO_ASSET = "rbxassetid://121759217057084"
-local LOGO2_ASSET = "rbxassetid://118676632373972"
+local function corner(inst, px)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, px or s(10))
+    c.Parent = inst
+    return c
+end
+
+local function strokeUI(inst, color, thickness, transparency)
+    local st = Instance.new("UIStroke")
+    st.Color = color
+    st.Thickness = thickness or 1
+    st.Transparency = transparency or 0
+    st.Parent = inst
+    return st
+end
 
 local ANIM_ID = "127290980842135"
 local TOUCH_RANGE = 15
@@ -226,236 +253,197 @@ InstantStompGui.ResetOnSpawn = false
 InstantStompGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 InstantStompGui.Parent = localPlayer:WaitForChild("PlayerGui")
 
+local ROW_H = s(34)
+local GAP = s(5)
+local headerH = s(50)
+local contentPad = s(10)
+local sliderRowH = s(50)
+local contentInner = ROW_H + GAP + sliderRowH + contentPad * 2
+local panelW = s(260)
+local panelH = headerH + s(8) + contentInner + s(16)
+
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = scaleUDim(240, 150)
+MainFrame.Size = UDim2.new(0, panelW, 0, panelH)
 MainFrame.Position = Shared.InstantStompPanelPos
-MainFrame.BackgroundColor3 = Theme.Background
-MainFrame.BackgroundTransparency = 0.02
+MainFrame.BackgroundColor3 = COL.BgMain
 MainFrame.BorderSizePixel = 0
 MainFrame.Parent = InstantStompGui
-Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 14 * SCALE)
-
-local MainStroke = Instance.new("UIStroke")
-MainStroke.Thickness = 2 * SCALE
-MainStroke.Transparency = 0
-MainStroke.Parent = MainFrame
-
-local mainStrokeGrad = Instance.new("UIGradient")
-mainStrokeGrad.Rotation = 90
-mainStrokeGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 20, 147)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(180, 50, 255)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(220, 20, 60))
-})
-mainStrokeGrad.Parent = MainStroke
+corner(MainFrame, s(14))
+strokeUI(MainFrame, COL.Stroke1, s(2), 0)
 
 local HeaderFrame = Instance.new("Frame")
-HeaderFrame.Name = "Header"
-HeaderFrame.Size = UDim2.new(1, 0, 0, 44 * SCALE)
-HeaderFrame.BackgroundColor3 = Theme.Card
+HeaderFrame.Size = UDim2.new(1, -s(14), 0, headerH)
+HeaderFrame.Position = UDim2.new(0, s(7), 0, s(7))
+HeaderFrame.BackgroundColor3 = COL.BgTop
 HeaderFrame.BorderSizePixel = 0
 HeaderFrame.Parent = MainFrame
-Instance.new("UICorner", HeaderFrame).CornerRadius = UDim.new(0, 14 * SCALE)
+corner(HeaderFrame, s(12))
+strokeUI(HeaderFrame, COL.Stroke2, 1, 0.15)
 
-local headerGlow = Instance.new("Frame")
-headerGlow.Size = UDim2.new(1, 0, 1, 0)
-headerGlow.BackgroundColor3 = Theme.Purple
-headerGlow.BackgroundTransparency = 0.88
-headerGlow.BorderSizePixel = 0
-headerGlow.Parent = HeaderFrame
-Instance.new("UICorner", headerGlow).CornerRadius = UDim.new(0, 14 * SCALE)
-
-local hGlowGrad = Instance.new("UIGradient")
-hGlowGrad.Rotation = 0
-hGlowGrad.Transparency = NumberSequence.new({
-    NumberSequenceKeypoint.new(0, 0),
-    NumberSequenceKeypoint.new(1, 1)
+local headerGrad = Instance.new("UIGradient")
+headerGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(165, 0, 0)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 0, 0)),
 })
-hGlowGrad.Parent = headerGlow
+headerGrad.Parent = HeaderFrame
 
-local HeaderLogo1 = Instance.new("ImageLabel")
-HeaderLogo1.Size = scaleUDim(26, 26)
-HeaderLogo1.Position = UDim2.new(0, 10 * SCALE, 0.5, -13 * SCALE)
-HeaderLogo1.BackgroundColor3 = Theme.Background
-HeaderLogo1.Image = LOGO_ASSET
-HeaderLogo1.ScaleType = Enum.ScaleType.Crop
-HeaderLogo1.Parent = HeaderFrame
-Instance.new("UICorner", HeaderLogo1).CornerRadius = UDim.new(0, 6 * SCALE)
+local headerLogo = Instance.new("ImageLabel")
+headerLogo.Size = UDim2.new(0, s(30), 0, s(30))
+headerLogo.Position = UDim2.new(0, s(10), 0.5, -s(15))
+headerLogo.BackgroundTransparency = 1
+headerLogo.Image = INTRO_LOGO_ASSET
+headerLogo.ScaleType = Enum.ScaleType.Crop
+headerLogo.ZIndex = 4
+headerLogo.Parent = HeaderFrame
+corner(headerLogo, s(999))
+strokeUI(headerLogo, COL.Stroke2, 1, 0.3)
 
-local HeaderX = Instance.new("TextLabel")
-HeaderX.Size = scaleUDim(14, 26)
-HeaderX.Position = UDim2.new(0, 38 * SCALE, 0.5, -13 * SCALE)
-HeaderX.BackgroundTransparency = 1
-HeaderX.Text = "X"
-HeaderX.Font = Enum.Font.GothamBlack
-HeaderX.TextSize = scaleSize(10)
-HeaderX.TextColor3 = Theme.Purple
-HeaderX.Parent = HeaderFrame
+local headerTitle = Instance.new("TextLabel")
+headerTitle.Size = UDim2.new(1, -s(55), 0, s(20))
+headerTitle.Position = UDim2.new(0, s(48), 0, s(6))
+headerTitle.BackgroundTransparency = 1
+headerTitle.Text = "INSTANT STOMP"
+headerTitle.Font = Enum.Font.GothamBlack
+headerTitle.TextSize = s(12)
+headerTitle.TextColor3 = COL.Text
+headerTitle.TextXAlignment = Enum.TextXAlignment.Left
+headerTitle.ZIndex = 4
+headerTitle.Parent = HeaderFrame
 
-local HeaderLogo2 = Instance.new("ImageLabel")
-HeaderLogo2.Size = scaleUDim(22, 22)
-HeaderLogo2.Position = UDim2.new(0, 54 * SCALE, 0.5, -11 * SCALE)
-HeaderLogo2.BackgroundTransparency = 1
-HeaderLogo2.Image = LOGO2_ASSET
-HeaderLogo2.ScaleType = Enum.ScaleType.Fit
-HeaderLogo2.Parent = HeaderFrame
-Instance.new("UICorner", HeaderLogo2).CornerRadius = UDim.new(1, 0)
+local headerSub = Instance.new("TextLabel")
+headerSub.Size = UDim2.new(1, -s(55), 0, s(14))
+headerSub.Position = UDim2.new(0, s(48), 0, s(28))
+headerSub.BackgroundTransparency = 1
+headerSub.Text = "developed by schmeckt"
+headerSub.Font = Enum.Font.Gotham
+headerSub.TextSize = s(10)
+headerSub.TextColor3 = COL.DevText
+headerSub.TextXAlignment = Enum.TextXAlignment.Left
+headerSub.ZIndex = 4
+headerSub.Parent = HeaderFrame
 
-local HeaderText = Instance.new("TextLabel")
-HeaderText.Size = UDim2.new(1, -90 * SCALE, 0, 16 * SCALE)
-HeaderText.Position = UDim2.new(0, 82 * SCALE, 0, 6 * SCALE)
-HeaderText.BackgroundTransparency = 1
-HeaderText.Text = "INSTANT STOMP"
-HeaderText.Font = Enum.Font.GothamBlack
-HeaderText.TextSize = scaleSize(11)
-HeaderText.TextColor3 = Theme.Accent
-HeaderText.TextXAlignment = Enum.TextXAlignment.Left
-HeaderText.Parent = HeaderFrame
-
-local headerTextGrad = Instance.new("UIGradient")
-headerTextGrad.Rotation = 0
-headerTextGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 20, 147)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(180, 50, 255)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 105, 180))
-})
-headerTextGrad.Parent = HeaderText
-
-local HeaderSub = Instance.new("TextLabel")
-HeaderSub.Size = UDim2.new(1, -90 * SCALE, 0, 12 * SCALE)
-HeaderSub.Position = UDim2.new(0, 82 * SCALE, 0, 24 * SCALE)
-HeaderSub.BackgroundTransparency = 1
-HeaderSub.Text = "Meulios X ShadowPepper"
-HeaderSub.Font = Enum.Font.GothamMedium
-HeaderSub.TextSize = scaleSize(8)
-HeaderSub.TextColor3 = Theme.SubText
-HeaderSub.TextXAlignment = Enum.TextXAlignment.Left
-HeaderSub.Parent = HeaderFrame
+local contentY = headerH + s(14)
 
 local ContentFrame = Instance.new("Frame")
-ContentFrame.Name = "Content"
-ContentFrame.Size = UDim2.new(1, -16 * SCALE, 0, 90 * SCALE)
-ContentFrame.Position = UDim2.new(0, 8 * SCALE, 0, 52 * SCALE)
-ContentFrame.BackgroundTransparency = 1
+ContentFrame.Size = UDim2.new(1, -s(14), 0, contentInner)
+ContentFrame.Position = UDim2.new(0, s(7), 0, contentY)
+ContentFrame.BackgroundColor3 = COL.BgInner
+ContentFrame.BorderSizePixel = 0
 ContentFrame.Parent = MainFrame
+corner(ContentFrame, s(12))
+strokeUI(ContentFrame, COL.Stroke2, 1, 0.25)
+
+local InnerContainer = Instance.new("Frame")
+InnerContainer.Size = UDim2.new(1, -contentPad * 2, 1, -contentPad * 2)
+InnerContainer.Position = UDim2.new(0, contentPad, 0, contentPad)
+InnerContainer.BackgroundTransparency = 1
+InnerContainer.Parent = ContentFrame
+
+local ListLayout = Instance.new("UIListLayout")
+ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+ListLayout.Padding = UDim.new(0, GAP)
+ListLayout.Parent = InnerContainer
+
+local TOGGLE_W = s(60)
+local TOGGLE_H = s(24)
 
 local ToggleRow = Instance.new("Frame")
-ToggleRow.Size = UDim2.new(1, 0, 0, 28 * SCALE)
-ToggleRow.BackgroundTransparency = 1
-ToggleRow.Parent = ContentFrame
+ToggleRow.Size = UDim2.new(1, 0, 0, ROW_H)
+ToggleRow.BackgroundColor3 = COL.Card
+ToggleRow.BorderSizePixel = 0
+ToggleRow.LayoutOrder = 0
+ToggleRow.Parent = InnerContainer
+corner(ToggleRow, s(8))
+strokeUI(ToggleRow, COL.Stroke2, 1, 0.4)
 
 local ToggleLabel = Instance.new("TextLabel")
-ToggleLabel.Size = UDim2.new(0.6, 0, 1, 0)
+ToggleLabel.Size = UDim2.new(1, -(TOGGLE_W + s(24)), 1, 0)
+ToggleLabel.Position = UDim2.new(0, s(12), 0, 0)
 ToggleLabel.BackgroundTransparency = 1
 ToggleLabel.Text = "Stomp Nearest"
-ToggleLabel.Font = Enum.Font.GothamBold
-ToggleLabel.TextSize = scaleSize(12)
-ToggleLabel.TextColor3 = Theme.Text
+ToggleLabel.Font = Enum.Font.GothamSemibold
+ToggleLabel.TextSize = s(12)
+ToggleLabel.TextColor3 = COL.Text
 ToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
+ToggleLabel.ZIndex = 5
 ToggleLabel.Parent = ToggleRow
 
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.AnchorPoint = Vector2.new(1, 0.5)
-ToggleButton.Position = UDim2.new(1, 0, 0.5, 0)
-ToggleButton.Size = scaleUDim(70, 24)
-ToggleButton.BackgroundColor3 = Shared.StompNearestEnabled and Theme.Success or Theme.Danger
-ToggleButton.Font = Enum.Font.GothamBlack
-ToggleButton.TextSize = scaleSize(10)
-ToggleButton.Text = Shared.StompNearestEnabled and "ON" or "OFF"
-ToggleButton.TextColor3 = Theme.Text
-ToggleButton.AutoButtonColor = false
-ToggleButton.Parent = ToggleRow
-Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 999)
-
-local toggleStroke = Instance.new("UIStroke")
-toggleStroke.Thickness = 1.5 * SCALE
-toggleStroke.Color = Theme.StrokeLight
-toggleStroke.Parent = ToggleButton
-
-local toggleGrad = Instance.new("UIGradient")
-toggleGrad.Rotation = 45
-toggleGrad.Parent = ToggleButton
+local TogglePill = Instance.new("TextButton")
+TogglePill.AutoButtonColor = false
+TogglePill.AnchorPoint = Vector2.new(1, 0.5)
+TogglePill.Position = UDim2.new(1, -s(8), 0.5, 0)
+TogglePill.Size = UDim2.new(0, TOGGLE_W, 0, TOGGLE_H)
+TogglePill.Font = Enum.Font.GothamBold
+TogglePill.TextSize = s(10)
+TogglePill.TextColor3 = COL.Text
+TogglePill.ZIndex = 6
+TogglePill.Parent = ToggleRow
+corner(TogglePill, s(999))
 
 local function updateToggle()
     local on = Shared.StompNearestEnabled
-    ToggleButton.Text = on and "ON" or "OFF"
-    toggleGrad.Color = on and ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(50, 255, 150)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 255, 200))
-    }) or ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 50, 80)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 20, 147))
-    })
+    TogglePill.BackgroundColor3 = on and COL.ToggleOn or COL.ToggleOff
+    TogglePill.Text = on and "ON" or "OFF"
 end
 updateToggle()
 
-table.insert(Shared.Connections[key], ToggleButton.MouseButton1Click:Connect(function()
+TogglePill.MouseButton1Click:Connect(function()
+    playClick()
     Shared.StompNearestEnabled = not Shared.StompNearestEnabled
     updateToggle()
     if Shared.SaveConfig then Shared.SaveConfig() end
-end))
+end)
 
 local SliderRow = Instance.new("Frame")
-SliderRow.Size = UDim2.new(1, 0, 0, 40 * SCALE)
-SliderRow.Position = UDim2.new(0, 0, 0, 36 * SCALE)
-SliderRow.BackgroundTransparency = 1
-SliderRow.Parent = ContentFrame
+SliderRow.Size = UDim2.new(1, 0, 0, sliderRowH)
+SliderRow.BackgroundColor3 = COL.Card
+SliderRow.BorderSizePixel = 0
+SliderRow.LayoutOrder = 1
+SliderRow.Parent = InnerContainer
+corner(SliderRow, s(8))
+strokeUI(SliderRow, COL.Stroke2, 1, 0.4)
 
 local RadiusLabel = Instance.new("TextLabel")
-RadiusLabel.Size = UDim2.new(0.35, 0, 0, 20 * SCALE)
+RadiusLabel.Size = UDim2.new(1, -s(20), 0, s(18))
+RadiusLabel.Position = UDim2.new(0, s(12), 0, s(4))
 RadiusLabel.BackgroundTransparency = 1
 RadiusLabel.Text = string.format("Radius: %d", Shared.StompRadius)
-RadiusLabel.Font = Enum.Font.GothamBold
-RadiusLabel.TextSize = scaleSize(11)
-RadiusLabel.TextColor3 = Theme.Text
+RadiusLabel.Font = Enum.Font.GothamSemibold
+RadiusLabel.TextSize = s(11)
+RadiusLabel.TextColor3 = COL.Text
 RadiusLabel.TextXAlignment = Enum.TextXAlignment.Left
+RadiusLabel.ZIndex = 5
 RadiusLabel.Parent = SliderRow
 
 local SliderBar = Instance.new("Frame")
-SliderBar.Size = UDim2.new(0.62, 0, 0, 10 * SCALE)
-SliderBar.Position = UDim2.new(0.38, 0, 0, 5 * SCALE)
-SliderBar.BackgroundColor3 = Theme.Card
+SliderBar.Size = UDim2.new(1, -s(24), 0, s(10))
+SliderBar.Position = UDim2.new(0, s(12), 0, s(28))
+SliderBar.BackgroundColor3 = COL.SliderBg
 SliderBar.Parent = SliderRow
-Instance.new("UICorner", SliderBar).CornerRadius = UDim.new(0, 6 * SCALE)
-
-local sliderBarStroke = Instance.new("UIStroke")
-sliderBarStroke.Thickness = 1 * SCALE
-sliderBarStroke.Color = Theme.Stroke
-sliderBarStroke.Parent = SliderBar
+corner(SliderBar, s(5))
+strokeUI(SliderBar, COL.Stroke2, 1, 0.4)
 
 local SliderFill = Instance.new("Frame")
 SliderFill.Size = UDim2.new(Shared.StompRadius / 50, 0, 1, 0)
-SliderFill.BackgroundColor3 = Theme.Purple
+SliderFill.BackgroundColor3 = COL.SliderFill
 SliderFill.Parent = SliderBar
-Instance.new("UICorner", SliderFill).CornerRadius = UDim.new(0, 6 * SCALE)
-
-local sliderFillGrad = Instance.new("UIGradient")
-sliderFillGrad.Rotation = 0
-sliderFillGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 20, 147)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 50, 255))
-})
-sliderFillGrad.Parent = SliderFill
+corner(SliderFill, s(5))
 
 local SliderThumb = Instance.new("Frame")
-SliderThumb.Size = scaleUDim(16, 16)
-SliderThumb.Position = UDim2.new(Shared.StompRadius / 50, -8 * SCALE, 0.5, -8 * SCALE)
-SliderThumb.BackgroundColor3 = Theme.PurpleLight
+SliderThumb.Size = UDim2.new(0, s(16), 0, s(16))
+SliderThumb.Position = UDim2.new(Shared.StompRadius / 50, -s(8), 0.5, -s(8))
+SliderThumb.BackgroundColor3 = COL.SliderThumb
 SliderThumb.Parent = SliderBar
-Instance.new("UICorner", SliderThumb).CornerRadius = UDim.new(1, 0)
-
-local thumbStroke = Instance.new("UIStroke")
-thumbStroke.Thickness = 2 * SCALE
-thumbStroke.Color = Theme.Purple
-thumbStroke.Parent = SliderThumb
+corner(SliderThumb, s(999))
+strokeUI(SliderThumb, COL.ToggleOn, s(2), 0)
 
 local SliderHit = Instance.new("TextButton")
 SliderHit.BackgroundTransparency = 1
 SliderHit.AutoButtonColor = false
 SliderHit.Text = ""
-SliderHit.Size = UDim2.new(1, 20 * SCALE, 1, 20 * SCALE)
-SliderHit.Position = UDim2.new(0, -10 * SCALE, 0, -10 * SCALE)
+SliderHit.Size = UDim2.new(1, s(20), 1, s(20))
+SliderHit.Position = UDim2.new(0, -s(10), 0, -s(10))
 SliderHit.Parent = SliderBar
 
 local sliding = false
@@ -465,7 +453,7 @@ local function setRadius(v)
     RadiusLabel.Text = string.format("Radius: %d", Shared.StompRadius)
     local r = Shared.StompRadius / 50
     SliderFill.Size = UDim2.new(r, 0, 1, 0)
-    SliderThumb.Position = UDim2.new(r, -8 * SCALE, 0.5, -8 * SCALE)
+    SliderThumb.Position = UDim2.new(r, -s(8), 0.5, -s(8))
     if Shared.SaveConfig then Shared.SaveConfig() end
 end
 
@@ -497,33 +485,27 @@ table.insert(Shared.Connections[key], UserInputService.InputEnded:Connect(functi
 end))
 
 local dragging, dragInput, dragStart, startPos
-
 HeaderFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
         dragStart = input.Position
         startPos = MainFrame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
     end
 end)
-
 HeaderFrame.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
         dragInput = input
     end
 end)
-
 table.insert(Shared.Connections[key], UserInputService.InputChanged:Connect(function(input)
     if input == dragInput and dragging then
         local delta = input.Position - dragStart
         local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         MainFrame.Position = newPos
         Shared.InstantStompPanelPos = newPos
-    end
-end))
-
-table.insert(Shared.Connections[key], UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
     end
 end))
 
@@ -544,7 +526,7 @@ for i = 1, SEGMENTS do
     p.CanQuery = false
     p.CanTouch = false
     p.Material = Enum.Material.Neon
-    p.Color = Theme.Purple
+    p.Color = COL.Ring
     p.Transparency = 1
     p.Size = Vector3.new(THICK, THICK, 0.2)
     p.TopSurface = Enum.SurfaceType.Smooth
@@ -584,12 +566,13 @@ table.insert(Shared.Connections[key], RunService.Heartbeat:Connect(function(dt)
         part.Size = Vector3.new(THICK, THICK, len)
         part.CFrame = cf
         part.Transparency = vis and 0.4 or 1
-        part.Color = Theme.Purple
+        part.Color = COL.Ring
     end
 end))
 
+local FINAL_SIZE = UDim2.new(0, panelW, 0, panelH)
 MainFrame.Size = UDim2.new(0, 0, 0, 0)
-TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = scaleUDim(240, 150)}):Play()
+TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = FINAL_SIZE}):Play()
 
 local function destroyAll()
     if Shared.Connections[key] then
