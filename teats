@@ -12,6 +12,19 @@ local Shared = getgenv().SchmecktHubPC or {}
 getgenv().SchmecktHubPC = Shared
 local key = "InstantStomp"
 
+local SCALE = 1
+if Shared.Platform == "Mobile" then
+    SCALE = 1 / 2.2
+end
+
+local function scaleUDim(x, y)
+    return UDim2.new(0, x * SCALE, 0, y * SCALE)
+end
+
+local function scaleSize(s)
+    return math.floor(s * SCALE)
+end
+
 Shared.Connections = Shared.Connections or {}
 Shared.StompRadius = math.clamp(Shared.StompRadius or 50, 0, 50)
 Shared.StompNearestEnabled = (Shared.StompNearestEnabled == true)
@@ -34,7 +47,6 @@ local Theme = {
     Background = Color3.fromRGB(20, 5, 15),
     Card = Color3.fromRGB(45, 12, 35),
     Accent = Color3.fromRGB(255, 20, 147),
-    AccentSecondary = Color3.fromRGB(220, 20, 60),
     Purple = Color3.fromRGB(180, 50, 255),
     PurpleLight = Color3.fromRGB(220, 130, 255),
     Text = Color3.fromRGB(255, 255, 255),
@@ -87,7 +99,6 @@ local function isKO(p)
     local ch = p and p.Character
     if not ch then return false end
     if ch:FindFirstChildOfClass("ForceField") then return false end
-
     local ko = findKOValue(ch)
     if ko and ko.Value == true then
         local be = ch:FindFirstChild("BodyEffects")
@@ -97,7 +108,6 @@ local function isKO(p)
         if hum and hum.Health <= 0 then return false end
         return true
     end
-
     local hum = ch:FindFirstChildOfClass("Humanoid")
     if hum then
         if hum.Health > 20 then return false end
@@ -172,8 +182,11 @@ local function hookAnim(ch)
     end)
 end
 
-table.insert(Shared.Connections[key], RunService.Heartbeat:Connect(function()
+local lastStompCheck = 0
+table.insert(Shared.Connections[key], RunService.Heartbeat:Connect(function(dt)
     local now = tick()
+    if now - lastStompCheck < MIN_CD then return end
+    lastStompCheck = now
     if now - lastStomp < MIN_CD then return end
     local myCh = localPlayer.Character
     if not myCh then return end
@@ -207,39 +220,25 @@ end))
 if localPlayer.Character then hookAnim(localPlayer.Character) end
 table.insert(Shared.Connections[key], localPlayer.CharacterAdded:Connect(hookAnim))
 
-
 local InstantStompGui = Instance.new("ScreenGui")
 InstantStompGui.Name = "InstantStompGui"
 InstantStompGui.ResetOnSpawn = false
 InstantStompGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 InstantStompGui.Parent = localPlayer:WaitForChild("PlayerGui")
 
-local MainShadow = Instance.new("Frame")
-MainShadow.Name = "Shadow"
-MainShadow.Size = UDim2.new(0, 250, 0, 160)
-MainShadow.Position = Shared.InstantStompPanelPos + UDim2.new(0, 5, 0, 5)
-MainShadow.BackgroundColor3 = Theme.Shadow
-MainShadow.BackgroundTransparency = 1
-MainShadow.BorderSizePixel = 0
-MainShadow.Parent = InstantStompGui
-Instance.new("UICorner", MainShadow).CornerRadius = UDim.new(0, 16)
-
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
-MainFrame.Size = UDim2.new(0, 240, 0, 150)
+MainFrame.Size = scaleUDim(240, 150)
 MainFrame.Position = Shared.InstantStompPanelPos
 MainFrame.BackgroundColor3 = Theme.Background
-MainFrame.BackgroundTransparency = 1
+MainFrame.BackgroundTransparency = 0.02
 MainFrame.BorderSizePixel = 0
 MainFrame.Parent = InstantStompGui
-
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 14)
-MainCorner.Parent = MainFrame
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 14 * SCALE)
 
 local MainStroke = Instance.new("UIStroke")
-MainStroke.Thickness = 2
-MainStroke.Transparency = 1
+MainStroke.Thickness = 2 * SCALE
+MainStroke.Transparency = 0
 MainStroke.Parent = MainFrame
 
 local mainStrokeGrad = Instance.new("UIGradient")
@@ -253,11 +252,11 @@ mainStrokeGrad.Parent = MainStroke
 
 local HeaderFrame = Instance.new("Frame")
 HeaderFrame.Name = "Header"
-HeaderFrame.Size = UDim2.new(1, 0, 0, 44)
+HeaderFrame.Size = UDim2.new(1, 0, 0, 44 * SCALE)
 HeaderFrame.BackgroundColor3 = Theme.Card
 HeaderFrame.BorderSizePixel = 0
 HeaderFrame.Parent = MainFrame
-Instance.new("UICorner", HeaderFrame).CornerRadius = UDim.new(0, 14)
+Instance.new("UICorner", HeaderFrame).CornerRadius = UDim.new(0, 14 * SCALE)
 
 local headerGlow = Instance.new("Frame")
 headerGlow.Size = UDim2.new(1, 0, 1, 0)
@@ -265,7 +264,7 @@ headerGlow.BackgroundColor3 = Theme.Purple
 headerGlow.BackgroundTransparency = 0.88
 headerGlow.BorderSizePixel = 0
 headerGlow.Parent = HeaderFrame
-Instance.new("UICorner", headerGlow).CornerRadius = UDim.new(0, 14)
+Instance.new("UICorner", headerGlow).CornerRadius = UDim.new(0, 14 * SCALE)
 
 local hGlowGrad = Instance.new("UIGradient")
 hGlowGrad.Rotation = 0
@@ -276,54 +275,42 @@ hGlowGrad.Transparency = NumberSequence.new({
 hGlowGrad.Parent = headerGlow
 
 local HeaderLogo1 = Instance.new("ImageLabel")
-HeaderLogo1.Size = UDim2.new(0, 26, 0, 26)
-HeaderLogo1.Position = UDim2.new(0, 10, 0.5, -13)
+HeaderLogo1.Size = scaleUDim(26, 26)
+HeaderLogo1.Position = UDim2.new(0, 10 * SCALE, 0.5, -13 * SCALE)
 HeaderLogo1.BackgroundColor3 = Theme.Background
 HeaderLogo1.Image = LOGO_ASSET
 HeaderLogo1.ScaleType = Enum.ScaleType.Crop
-HeaderLogo1.ImageTransparency = 1
 HeaderLogo1.Parent = HeaderFrame
-Instance.new("UICorner", HeaderLogo1).CornerRadius = UDim.new(0, 6)
+Instance.new("UICorner", HeaderLogo1).CornerRadius = UDim.new(0, 6 * SCALE)
 
 local HeaderX = Instance.new("TextLabel")
-HeaderX.Size = UDim2.new(0, 14, 0, 26)
-HeaderX.Position = UDim2.new(0, 38, 0.5, -13)
+HeaderX.Size = scaleUDim(14, 26)
+HeaderX.Position = UDim2.new(0, 38 * SCALE, 0.5, -13 * SCALE)
 HeaderX.BackgroundTransparency = 1
-HeaderX.Text = "✕"
+HeaderX.Text = "X"
 HeaderX.Font = Enum.Font.GothamBlack
-HeaderX.TextSize = 10
+HeaderX.TextSize = scaleSize(10)
 HeaderX.TextColor3 = Theme.Purple
-HeaderX.TextTransparency = 1
 HeaderX.Parent = HeaderFrame
 
-local headerXGrad = Instance.new("UIGradient")
-headerXGrad.Rotation = 45
-headerXGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(180, 50, 255)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(220, 130, 255))
-})
-headerXGrad.Parent = HeaderX
-
 local HeaderLogo2 = Instance.new("ImageLabel")
-HeaderLogo2.Size = UDim2.new(0, 22, 0, 22)
-HeaderLogo2.Position = UDim2.new(0, 54, 0.5, -11)
+HeaderLogo2.Size = scaleUDim(22, 22)
+HeaderLogo2.Position = UDim2.new(0, 54 * SCALE, 0.5, -11 * SCALE)
 HeaderLogo2.BackgroundTransparency = 1
 HeaderLogo2.Image = LOGO2_ASSET
 HeaderLogo2.ScaleType = Enum.ScaleType.Fit
-HeaderLogo2.ImageTransparency = 1
 HeaderLogo2.Parent = HeaderFrame
 Instance.new("UICorner", HeaderLogo2).CornerRadius = UDim.new(1, 0)
 
 local HeaderText = Instance.new("TextLabel")
-HeaderText.Size = UDim2.new(1, -90, 0, 16)
-HeaderText.Position = UDim2.new(0, 82, 0, 6)
+HeaderText.Size = UDim2.new(1, -90 * SCALE, 0, 16 * SCALE)
+HeaderText.Position = UDim2.new(0, 82 * SCALE, 0, 6 * SCALE)
 HeaderText.BackgroundTransparency = 1
 HeaderText.Text = "INSTANT STOMP"
 HeaderText.Font = Enum.Font.GothamBlack
-HeaderText.TextSize = 11
+HeaderText.TextSize = scaleSize(11)
 HeaderText.TextColor3 = Theme.Accent
 HeaderText.TextXAlignment = Enum.TextXAlignment.Left
-HeaderText.TextTransparency = 1
 HeaderText.Parent = HeaderFrame
 
 local headerTextGrad = Instance.new("UIGradient")
@@ -336,71 +323,53 @@ headerTextGrad.Color = ColorSequence.new({
 headerTextGrad.Parent = HeaderText
 
 local HeaderSub = Instance.new("TextLabel")
-HeaderSub.Size = UDim2.new(1, -90, 0, 12)
-HeaderSub.Position = UDim2.new(0, 82, 0, 24)
+HeaderSub.Size = UDim2.new(1, -90 * SCALE, 0, 12 * SCALE)
+HeaderSub.Position = UDim2.new(0, 82 * SCALE, 0, 24 * SCALE)
 HeaderSub.BackgroundTransparency = 1
-HeaderSub.Text = "Meulios ✕ ShadowPepper"
+HeaderSub.Text = "Meulios X ShadowPepper"
 HeaderSub.Font = Enum.Font.GothamMedium
-HeaderSub.TextSize = 8
+HeaderSub.TextSize = scaleSize(8)
 HeaderSub.TextColor3 = Theme.SubText
 HeaderSub.TextXAlignment = Enum.TextXAlignment.Left
-HeaderSub.TextTransparency = 1
 HeaderSub.Parent = HeaderFrame
-
-local subGrad = Instance.new("UIGradient")
-subGrad.Rotation = -45
-subGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 150, 180)),
-    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(220, 130, 255)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 105, 180))
-})
-subGrad.Parent = HeaderSub
 
 local ContentFrame = Instance.new("Frame")
 ContentFrame.Name = "Content"
-ContentFrame.Size = UDim2.new(1, -16, 0, 90)
-ContentFrame.Position = UDim2.new(0, 8, 0, 52)
+ContentFrame.Size = UDim2.new(1, -16 * SCALE, 0, 90 * SCALE)
+ContentFrame.Position = UDim2.new(0, 8 * SCALE, 0, 52 * SCALE)
 ContentFrame.BackgroundTransparency = 1
 ContentFrame.Parent = MainFrame
 
 local ToggleRow = Instance.new("Frame")
-ToggleRow.Name = "ToggleRow"
-ToggleRow.Size = UDim2.new(1, 0, 0, 28)
-ToggleRow.Position = UDim2.new(0, 0, 0, 0)
+ToggleRow.Size = UDim2.new(1, 0, 0, 28 * SCALE)
 ToggleRow.BackgroundTransparency = 1
 ToggleRow.Parent = ContentFrame
 
 local ToggleLabel = Instance.new("TextLabel")
 ToggleLabel.Size = UDim2.new(0.6, 0, 1, 0)
-ToggleLabel.Position = UDim2.new(0, 0, 0, 0)
 ToggleLabel.BackgroundTransparency = 1
 ToggleLabel.Text = "Stomp Nearest"
 ToggleLabel.Font = Enum.Font.GothamBold
-ToggleLabel.TextSize = 12
+ToggleLabel.TextSize = scaleSize(12)
 ToggleLabel.TextColor3 = Theme.Text
 ToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
-ToggleLabel.TextTransparency = 1
 ToggleLabel.Parent = ToggleRow
 
 local ToggleButton = Instance.new("TextButton")
-ToggleButton.Name = "Toggle"
 ToggleButton.AnchorPoint = Vector2.new(1, 0.5)
 ToggleButton.Position = UDim2.new(1, 0, 0.5, 0)
-ToggleButton.Size = UDim2.new(0, 70, 0, 24)
+ToggleButton.Size = scaleUDim(70, 24)
 ToggleButton.BackgroundColor3 = Shared.StompNearestEnabled and Theme.Success or Theme.Danger
-ToggleButton.BackgroundTransparency = 1
 ToggleButton.Font = Enum.Font.GothamBlack
-ToggleButton.TextSize = 10
+ToggleButton.TextSize = scaleSize(10)
 ToggleButton.Text = Shared.StompNearestEnabled and "ON" or "OFF"
 ToggleButton.TextColor3 = Theme.Text
-ToggleButton.TextTransparency = 1
 ToggleButton.AutoButtonColor = false
 ToggleButton.Parent = ToggleRow
 Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(0, 999)
 
 local toggleStroke = Instance.new("UIStroke")
-toggleStroke.Thickness = 1.5
-toggleStroke.Transparency = 1
+toggleStroke.Thickness = 1.5 * SCALE
 toggleStroke.Color = Theme.StrokeLight
 toggleStroke.Parent = ToggleButton
 
@@ -428,47 +397,38 @@ table.insert(Shared.Connections[key], ToggleButton.MouseButton1Click:Connect(fun
 end))
 
 local SliderRow = Instance.new("Frame")
-SliderRow.Name = "SliderRow"
-SliderRow.Size = UDim2.new(1, 0, 0, 40)
-SliderRow.Position = UDim2.new(0, 0, 0, 36)
+SliderRow.Size = UDim2.new(1, 0, 0, 40 * SCALE)
+SliderRow.Position = UDim2.new(0, 0, 0, 36 * SCALE)
 SliderRow.BackgroundTransparency = 1
 SliderRow.Parent = ContentFrame
 
 local RadiusLabel = Instance.new("TextLabel")
-RadiusLabel.Name = "RadiusLabel"
-RadiusLabel.Size = UDim2.new(0.35, 0, 0, 20)
-RadiusLabel.Position = UDim2.new(0, 0, 0, 0)
+RadiusLabel.Size = UDim2.new(0.35, 0, 0, 20 * SCALE)
 RadiusLabel.BackgroundTransparency = 1
 RadiusLabel.Text = string.format("Radius: %d", Shared.StompRadius)
 RadiusLabel.Font = Enum.Font.GothamBold
-RadiusLabel.TextSize = 11
+RadiusLabel.TextSize = scaleSize(11)
 RadiusLabel.TextColor3 = Theme.Text
 RadiusLabel.TextXAlignment = Enum.TextXAlignment.Left
-RadiusLabel.TextTransparency = 1
 RadiusLabel.Parent = SliderRow
 
 local SliderBar = Instance.new("Frame")
-SliderBar.Name = "SliderBar"
-SliderBar.Size = UDim2.new(0.62, 0, 0, 10)
-SliderBar.Position = UDim2.new(0.38, 0, 0, 5)
+SliderBar.Size = UDim2.new(0.62, 0, 0, 10 * SCALE)
+SliderBar.Position = UDim2.new(0.38, 0, 0, 5 * SCALE)
 SliderBar.BackgroundColor3 = Theme.Card
-SliderBar.BackgroundTransparency = 1
 SliderBar.Parent = SliderRow
-Instance.new("UICorner", SliderBar).CornerRadius = UDim.new(0, 6)
+Instance.new("UICorner", SliderBar).CornerRadius = UDim.new(0, 6 * SCALE)
 
 local sliderBarStroke = Instance.new("UIStroke")
-sliderBarStroke.Thickness = 1
-sliderBarStroke.Transparency = 1
+sliderBarStroke.Thickness = 1 * SCALE
 sliderBarStroke.Color = Theme.Stroke
 sliderBarStroke.Parent = SliderBar
 
 local SliderFill = Instance.new("Frame")
-SliderFill.Name = "Fill"
 SliderFill.Size = UDim2.new(Shared.StompRadius / 50, 0, 1, 0)
 SliderFill.BackgroundColor3 = Theme.Purple
-SliderFill.BackgroundTransparency = 1
 SliderFill.Parent = SliderBar
-Instance.new("UICorner", SliderFill).CornerRadius = UDim.new(0, 6)
+Instance.new("UICorner", SliderFill).CornerRadius = UDim.new(0, 6 * SCALE)
 
 local sliderFillGrad = Instance.new("UIGradient")
 sliderFillGrad.Rotation = 0
@@ -479,17 +439,14 @@ sliderFillGrad.Color = ColorSequence.new({
 sliderFillGrad.Parent = SliderFill
 
 local SliderThumb = Instance.new("Frame")
-SliderThumb.Name = "Thumb"
-SliderThumb.Size = UDim2.new(0, 16, 0, 16)
-SliderThumb.Position = UDim2.new(Shared.StompRadius / 50, -8, 0.5, -8)
+SliderThumb.Size = scaleUDim(16, 16)
+SliderThumb.Position = UDim2.new(Shared.StompRadius / 50, -8 * SCALE, 0.5, -8 * SCALE)
 SliderThumb.BackgroundColor3 = Theme.PurpleLight
-SliderThumb.BackgroundTransparency = 1
 SliderThumb.Parent = SliderBar
 Instance.new("UICorner", SliderThumb).CornerRadius = UDim.new(1, 0)
 
 local thumbStroke = Instance.new("UIStroke")
-thumbStroke.Thickness = 2
-thumbStroke.Transparency = 1
+thumbStroke.Thickness = 2 * SCALE
 thumbStroke.Color = Theme.Purple
 thumbStroke.Parent = SliderThumb
 
@@ -497,8 +454,8 @@ local SliderHit = Instance.new("TextButton")
 SliderHit.BackgroundTransparency = 1
 SliderHit.AutoButtonColor = false
 SliderHit.Text = ""
-SliderHit.Size = UDim2.new(1, 20, 1, 20)
-SliderHit.Position = UDim2.new(0, -10, 0, -10)
+SliderHit.Size = UDim2.new(1, 20 * SCALE, 1, 20 * SCALE)
+SliderHit.Position = UDim2.new(0, -10 * SCALE, 0, -10 * SCALE)
 SliderHit.Parent = SliderBar
 
 local sliding = false
@@ -508,7 +465,7 @@ local function setRadius(v)
     RadiusLabel.Text = string.format("Radius: %d", Shared.StompRadius)
     local r = Shared.StompRadius / 50
     SliderFill.Size = UDim2.new(r, 0, 1, 0)
-    SliderThumb.Position = UDim2.new(r, -8, 0.5, -8)
+    SliderThumb.Position = UDim2.new(r, -8 * SCALE, 0.5, -8 * SCALE)
     if Shared.SaveConfig then Shared.SaveConfig() end
 end
 
@@ -539,15 +496,13 @@ table.insert(Shared.Connections[key], UserInputService.InputEnded:Connect(functi
     end
 end))
 
-
-local dragging, dragInput, dragStart, startPos, shadowStartPos
+local dragging, dragInput, dragStart, startPos
 
 HeaderFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
         dragStart = input.Position
         startPos = MainFrame.Position
-        shadowStartPos = MainShadow.Position
     end
 end)
 
@@ -562,7 +517,6 @@ table.insert(Shared.Connections[key], UserInputService.InputChanged:Connect(func
         local delta = input.Position - dragStart
         local newPos = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         MainFrame.Position = newPos
-        MainShadow.Position = UDim2.new(shadowStartPos.X.Scale, shadowStartPos.X.Offset + delta.X, shadowStartPos.Y.Scale, shadowStartPos.Y.Offset + delta.Y)
         Shared.InstantStompPanelPos = newPos
     end
 end))
@@ -573,12 +527,11 @@ table.insert(Shared.Connections[key], UserInputService.InputEnded:Connect(functi
     end
 end))
 
-
 local ringFolder = Instance.new("Folder")
 ringFolder.Name = "Schmeckt_InstantStomp_Ring"
 ringFolder.Parent = Workspace
 
-local SEGMENTS = 64
+local SEGMENTS = 32
 local THICK = 0.08
 local YOFFSET = 0.03
 local segments = {}
@@ -604,22 +557,20 @@ local rcParams = RaycastParams.new()
 rcParams.FilterType = Enum.RaycastFilterType.Exclude
 rcParams.IgnoreWater = true
 
-local ringColorPhase = 0
-
-local function updateRing(dt)
+local lastRingUpdate = 0
+table.insert(Shared.Connections[key], RunService.Heartbeat:Connect(function(dt)
+    lastRingUpdate = lastRingUpdate + dt
+    if lastRingUpdate < 0.1 then return end
+    lastRingUpdate = 0
     local ch = localPlayer.Character
     local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
-    
     rcParams.FilterDescendantsInstances = {ch}
     local res = Workspace:Raycast(hrp.Position, Vector3.new(0, -100, 0), rcParams)
     local center = (res and res.Position or (hrp.Position - Vector3.new(0, 3, 0))) + Vector3.new(0, YOFFSET, 0)
     local r = Shared.StompRadius
     local vis = Shared.StompNearestEnabled
     local twoPi = math.pi * 2
-    
-    ringColorPhase = (ringColorPhase + dt * 0.5) % 1
-    
     for i = 1, SEGMENTS do
         local a1 = twoPi * (i - 1) / SEGMENTS
         local a2 = twoPi * i / SEGMENTS
@@ -633,108 +584,12 @@ local function updateRing(dt)
         part.Size = Vector3.new(THICK, THICK, len)
         part.CFrame = cf
         part.Transparency = vis and 0.4 or 1
-        
-        if vis then
-            local segPhase = (ringColorPhase + i / SEGMENTS) % 1
-            local colors = {
-                Color3.fromRGB(255, 20, 147),
-                Color3.fromRGB(220, 20, 60),
-                Color3.fromRGB(180, 50, 255),
-                Color3.fromRGB(255, 105, 180),
-            }
-            local index = math.floor(segPhase * #colors) + 1
-            local nextIndex = (index % #colors) + 1
-            local localT = (segPhase * #colors) % 1
-            part.Color = colors[index]:Lerp(colors[nextIndex], localT)
-        end
+        part.Color = Theme.Purple
     end
-end
-
-table.insert(Shared.Connections[key], RunService.Heartbeat:Connect(updateRing))
-
-
-local mainColorPhase = 0
-local mainColorConnection = RunService.Heartbeat:Connect(function(dt)
-    if not MainFrame.Parent then
-        mainColorConnection:Disconnect()
-        return
-    end
-    
-    mainColorPhase = (mainColorPhase + dt * 0.6) % 1
-    
-    local function lerpColor(t)
-        local colors = {
-            Color3.fromRGB(255, 20, 147),
-            Color3.fromRGB(220, 20, 60),
-            Color3.fromRGB(180, 50, 255),
-            Color3.fromRGB(255, 105, 180),
-        }
-        local index = math.floor(t * #colors) + 1
-        local nextIndex = (index % #colors) + 1
-        local localT = (t * #colors) % 1
-        return colors[index]:Lerp(colors[nextIndex], localT)
-    end
-    
-    local o1 = mainColorPhase
-    local o2 = (mainColorPhase + 0.33) % 1
-    local o3 = (mainColorPhase + 0.66) % 1
-    
-    mainStrokeGrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, lerpColor(o1)),
-        ColorSequenceKeypoint.new(0.5, lerpColor(o2)),
-        ColorSequenceKeypoint.new(1, lerpColor(o3))
-    })
-    
-    headerTextGrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, lerpColor(o1)),
-        ColorSequenceKeypoint.new(0.5, lerpColor(o2)),
-        ColorSequenceKeypoint.new(1, lerpColor(o3))
-    })
-    
-    headerXGrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, lerpColor(o2)),
-        ColorSequenceKeypoint.new(1, lerpColor(o3))
-    })
-    
-    subGrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, lerpColor(o2):Lerp(Color3.new(1, 1, 1), 0.3)),
-        ColorSequenceKeypoint.new(0.5, lerpColor(o3)),
-        ColorSequenceKeypoint.new(1, lerpColor(o1):Lerp(Color3.new(1, 1, 1), 0.3))
-    })
-    
-    sliderFillGrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, lerpColor(o1)),
-        ColorSequenceKeypoint.new(1, lerpColor(o2))
-    })
-end)
-table.insert(Shared.Connections[key], mainColorConnection)
-
+end))
 
 MainFrame.Size = UDim2.new(0, 0, 0, 0)
-MainShadow.Size = UDim2.new(0, 0, 0, 0)
-
-local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-local fadeTween = TweenInfo.new(0.5, Enum.EasingStyle.Quad)
-
-TweenService:Create(MainFrame, tweenInfo, {Size = UDim2.new(0, 240, 0, 150), BackgroundTransparency = 0.02}):Play()
-TweenService:Create(MainShadow, tweenInfo, {Size = UDim2.new(0, 250, 0, 160)}):Play()
-TweenService:Create(MainShadow, fadeTween, {BackgroundTransparency = 0.5}):Play()
-TweenService:Create(MainStroke, fadeTween, {Transparency = 0}):Play()
-TweenService:Create(HeaderLogo1, fadeTween, {ImageTransparency = 0}):Play()
-TweenService:Create(HeaderLogo2, fadeTween, {ImageTransparency = 0}):Play()
-TweenService:Create(HeaderX, fadeTween, {TextTransparency = 0}):Play()
-TweenService:Create(HeaderText, fadeTween, {TextTransparency = 0}):Play()
-TweenService:Create(HeaderSub, fadeTween, {TextTransparency = 0}):Play()
-TweenService:Create(ToggleLabel, fadeTween, {TextTransparency = 0}):Play()
-TweenService:Create(ToggleButton, fadeTween, {BackgroundTransparency = 0, TextTransparency = 0}):Play()
-TweenService:Create(toggleStroke, fadeTween, {Transparency = 0}):Play()
-TweenService:Create(RadiusLabel, fadeTween, {TextTransparency = 0}):Play()
-TweenService:Create(SliderBar, fadeTween, {BackgroundTransparency = 0}):Play()
-TweenService:Create(sliderBarStroke, fadeTween, {Transparency = 0}):Play()
-TweenService:Create(SliderFill, fadeTween, {BackgroundTransparency = 0}):Play()
-TweenService:Create(SliderThumb, fadeTween, {BackgroundTransparency = 0}):Play()
-TweenService:Create(thumbStroke, fadeTween, {Transparency = 0}):Play()
-
+TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {Size = scaleUDim(240, 150)}):Play()
 
 local function destroyAll()
     if Shared.Connections[key] then
@@ -743,11 +598,9 @@ local function destroyAll()
         end
         Shared.Connections[key] = {}
     end
-    
     if InstantStompGui then
         pcall(function() InstantStompGui:Destroy() end)
     end
-    
     local rf = Workspace:FindFirstChild("Schmeckt_InstantStomp_Ring")
     if rf then
         pcall(function() rf:Destroy() end)
