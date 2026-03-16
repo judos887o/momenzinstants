@@ -14,12 +14,10 @@ getgenv().SchmecktHubPC = Shared
 local key = "InstantStomp"
 
 local IS_MOBILE = Shared.Platform == "Mobile" or UserInputService.TouchEnabled
-local SCALE = IS_MOBILE and 0.5 or 1
-
+local SCALE = IS_MOBILE and (1 / 2.2) or 1
 local function s(v) return math.floor(v * SCALE) end
 
 local CLICK_SOUND_ID = "rbxassetid://100809160609628"
-local INTRO_LOGO_ASSET = "rbxassetid://121759217057084"
 
 local clickSound = SoundService:FindFirstChild("SchmecktClickSound")
 if not clickSound then
@@ -31,9 +29,7 @@ if not clickSound then
 end
 
 local function playClick()
-    task.spawn(function()
-        pcall(function() clickSound:Stop() clickSound:Play() end)
-    end)
+    task.spawn(function() pcall(function() clickSound:Stop() clickSound:Play() end) end)
 end
 
 Shared.Connections = Shared.Connections or {}
@@ -42,9 +38,7 @@ Shared.StompNearestEnabled = (Shared.StompNearestEnabled == true)
 Shared.InstantStompPanelPos = Shared.InstantStompPanelPos or UDim2.new(0, s(40), 0, s(40))
 
 if Shared.Connections[key] then
-    for _, c in pairs(Shared.Connections[key]) do
-        pcall(function() c:Disconnect() end)
-    end
+    for _, c in pairs(Shared.Connections[key]) do pcall(function() c:Disconnect() end) end
 end
 Shared.Connections[key] = {}
 
@@ -55,38 +49,18 @@ local oldRing = Workspace:FindFirstChild("Schmeckt_InstantStomp_Ring")
 if oldRing then oldRing:Destroy() end
 
 local COL = {
-    BgMain = Color3.fromRGB(90, 0, 0),
-    BgTop = Color3.fromRGB(140, 0, 0),
-    BgInner = Color3.fromRGB(120, 0, 0),
-    Card = Color3.fromRGB(135, 0, 0),
-    Stroke1 = Color3.fromRGB(255, 110, 110),
-    Stroke2 = Color3.fromRGB(255, 150, 150),
-    Text = Color3.fromRGB(255, 255, 255),
-    DevText = Color3.fromRGB(200, 160, 160),
-    SubText = Color3.fromRGB(255, 210, 210),
-    ToggleOff = Color3.fromRGB(175, 50, 120),
-    ToggleOn = Color3.fromRGB(220, 70, 160),
-    SliderBg = Color3.fromRGB(110, 0, 0),
-    SliderFill = Color3.fromRGB(220, 70, 160),
-    SliderThumb = Color3.fromRGB(255, 150, 150),
-    Ring = Color3.fromRGB(255, 80, 80),
+    BgMain = Color3.fromRGB(14, 10, 10),
+    StrokeMain = Color3.fromRGB(150, 30, 30),
+    Div = Color3.fromRGB(60, 15, 15),
+    RowBg = Color3.fromRGB(20, 14, 14),
+    RowStroke = Color3.fromRGB(50, 20, 20),
+    TextOn = Color3.fromRGB(255, 255, 255),
+    TextOff = Color3.fromRGB(160, 120, 120),
+    ToggleBgOn = Color3.fromRGB(200, 40, 40),
+    ToggleBgOff = Color3.fromRGB(40, 20, 20),
+    Dot = Color3.fromRGB(255, 255, 255),
+    Ring = Color3.fromRGB(255, 60, 60)
 }
-
-local function corner(inst, px)
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, px or s(10))
-    c.Parent = inst
-    return c
-end
-
-local function strokeUI(inst, color, thickness, transparency)
-    local st = Instance.new("UIStroke")
-    st.Color = color
-    st.Thickness = thickness or 1
-    st.Transparency = transparency or 0
-    st.Parent = inst
-    return st
-end
 
 local ANIM_ID = "127290980842135"
 local TOUCH_RANGE = 15
@@ -210,7 +184,7 @@ local function hookAnim(ch)
 end
 
 local lastStompCheck = 0
-table.insert(Shared.Connections[key], RunService.Heartbeat:Connect(function(dt)
+table.insert(Shared.Connections[key], RunService.Heartbeat:Connect(function()
     local now = tick()
     if now - lastStompCheck < MIN_CD then return end
     lastStompCheck = now
@@ -253,14 +227,8 @@ InstantStompGui.ResetOnSpawn = false
 InstantStompGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 InstantStompGui.Parent = localPlayer:WaitForChild("PlayerGui")
 
-local ROW_H = s(34)
-local GAP = s(5)
-local headerH = s(50)
-local contentPad = s(10)
-local sliderRowH = s(50)
-local contentInner = ROW_H + GAP + sliderRowH + contentPad * 2
-local panelW = s(260)
-local panelH = headerH + s(8) + contentInner + s(16)
+local panelW = s(250)
+local panelH = s(140)
 
 local MainFrame = Instance.new("Frame")
 MainFrame.Name = "MainFrame"
@@ -268,192 +236,134 @@ MainFrame.Size = UDim2.new(0, panelW, 0, panelH)
 MainFrame.Position = Shared.InstantStompPanelPos
 MainFrame.BackgroundColor3 = COL.BgMain
 MainFrame.BorderSizePixel = 0
+MainFrame.Active = true
+MainFrame.Draggable = true
 MainFrame.Parent = InstantStompGui
-corner(MainFrame, s(14))
-strokeUI(MainFrame, COL.Stroke1, s(2), 0)
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, s(8))
+local MainStroke = Instance.new("UIStroke", MainFrame)
+MainStroke.Color = COL.StrokeMain
+MainStroke.Thickness = 1
 
-local HeaderFrame = Instance.new("Frame")
-HeaderFrame.Size = UDim2.new(1, -s(14), 0, headerH)
-HeaderFrame.Position = UDim2.new(0, s(7), 0, s(7))
-HeaderFrame.BackgroundColor3 = COL.BgTop
-HeaderFrame.BorderSizePixel = 0
-HeaderFrame.Parent = MainFrame
-corner(HeaderFrame, s(12))
-strokeUI(HeaderFrame, COL.Stroke2, 1, 0.15)
+local PanelTitle = Instance.new("TextLabel", MainFrame)
+PanelTitle.Size = UDim2.new(1, -s(20), 0, s(40))
+PanelTitle.Position = UDim2.new(0, s(16), 0, 0)
+PanelTitle.BackgroundTransparency = 1
+PanelTitle.Text = "Instant Stomp"
+PanelTitle.TextColor3 = COL.TextOn
+PanelTitle.Font = Enum.Font.GothamBold
+PanelTitle.TextSize = s(14)
+PanelTitle.TextXAlignment = Enum.TextXAlignment.Left
 
-local headerGrad = Instance.new("UIGradient")
-headerGrad.Color = ColorSequence.new({
-    ColorSequenceKeypoint.new(0, Color3.fromRGB(165, 0, 0)),
-    ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 0, 0)),
-})
-headerGrad.Parent = HeaderFrame
+local PanelDiv = Instance.new("Frame", MainFrame)
+PanelDiv.Size = UDim2.new(1, 0, 0, math.max(1, s(1)))
+PanelDiv.Position = UDim2.new(0, 0, 0, s(40))
+PanelDiv.BackgroundColor3 = COL.Div
+PanelDiv.BorderSizePixel = 0
 
-local headerLogo = Instance.new("ImageLabel")
-headerLogo.Size = UDim2.new(0, s(30), 0, s(30))
-headerLogo.Position = UDim2.new(0, s(10), 0.5, -s(15))
-headerLogo.BackgroundTransparency = 1
-headerLogo.Image = INTRO_LOGO_ASSET
-headerLogo.ScaleType = Enum.ScaleType.Crop
-headerLogo.ZIndex = 4
-headerLogo.Parent = HeaderFrame
-corner(headerLogo, s(999))
-strokeUI(headerLogo, COL.Stroke2, 1, 0.3)
-
-local headerTitle = Instance.new("TextLabel")
-headerTitle.Size = UDim2.new(1, -s(55), 0, s(20))
-headerTitle.Position = UDim2.new(0, s(48), 0, s(6))
-headerTitle.BackgroundTransparency = 1
-headerTitle.Text = "INSTANT STOMP"
-headerTitle.Font = Enum.Font.GothamBlack
-headerTitle.TextSize = s(12)
-headerTitle.TextColor3 = COL.Text
-headerTitle.TextXAlignment = Enum.TextXAlignment.Left
-headerTitle.ZIndex = 4
-headerTitle.Parent = HeaderFrame
-
-local headerSub = Instance.new("TextLabel")
-headerSub.Size = UDim2.new(1, -s(55), 0, s(14))
-headerSub.Position = UDim2.new(0, s(48), 0, s(28))
-headerSub.BackgroundTransparency = 1
-headerSub.Text = "developed by schmeckt"
-headerSub.Font = Enum.Font.Gotham
-headerSub.TextSize = s(10)
-headerSub.TextColor3 = COL.DevText
-headerSub.TextXAlignment = Enum.TextXAlignment.Left
-headerSub.ZIndex = 4
-headerSub.Parent = HeaderFrame
-
-local contentY = headerH + s(14)
-
-local ContentFrame = Instance.new("Frame")
-ContentFrame.Size = UDim2.new(1, -s(14), 0, contentInner)
-ContentFrame.Position = UDim2.new(0, s(7), 0, contentY)
-ContentFrame.BackgroundColor3 = COL.BgInner
-ContentFrame.BorderSizePixel = 0
-ContentFrame.Parent = MainFrame
-corner(ContentFrame, s(12))
-strokeUI(ContentFrame, COL.Stroke2, 1, 0.25)
-
-local InnerContainer = Instance.new("Frame")
-InnerContainer.Size = UDim2.new(1, -contentPad * 2, 1, -contentPad * 2)
-InnerContainer.Position = UDim2.new(0, contentPad, 0, contentPad)
+local InnerContainer = Instance.new("Frame", MainFrame)
+InnerContainer.Size = UDim2.new(1, 0, 1, -s(41))
+InnerContainer.Position = UDim2.new(0, 0, 0, s(41))
 InnerContainer.BackgroundTransparency = 1
-InnerContainer.Parent = ContentFrame
 
-local ListLayout = Instance.new("UIListLayout")
+local ListLayout = Instance.new("UIListLayout", InnerContainer)
 ListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-ListLayout.Padding = UDim.new(0, GAP)
-ListLayout.Parent = InnerContainer
+ListLayout.Padding = UDim.new(0, s(8))
+ListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+Instance.new("UIPadding", InnerContainer).PaddingTop = UDim.new(0, s(10))
 
-local TOGGLE_W = s(60)
-local TOGGLE_H = s(24)
+local ToggleRow = Instance.new("Frame", InnerContainer)
+ToggleRow.Size = UDim2.new(0.9, 0, 0, s(36))
+ToggleRow.BackgroundColor3 = COL.RowBg
+ToggleRow.LayoutOrder = 1
+Instance.new("UICorner", ToggleRow).CornerRadius = UDim.new(0, s(6))
+local ToggleStroke = Instance.new("UIStroke", ToggleRow)
+ToggleStroke.Color = COL.RowStroke
 
-local ToggleRow = Instance.new("Frame")
-ToggleRow.Size = UDim2.new(1, 0, 0, ROW_H)
-ToggleRow.BackgroundColor3 = COL.Card
-ToggleRow.BorderSizePixel = 0
-ToggleRow.LayoutOrder = 0
-ToggleRow.Parent = InnerContainer
-corner(ToggleRow, s(8))
-strokeUI(ToggleRow, COL.Stroke2, 1, 0.4)
-
-local ToggleLabel = Instance.new("TextLabel")
-ToggleLabel.Size = UDim2.new(1, -(TOGGLE_W + s(24)), 1, 0)
+local ToggleLabel = Instance.new("TextLabel", ToggleRow)
+ToggleLabel.Size = UDim2.new(0.65, 0, 1, 0)
 ToggleLabel.Position = UDim2.new(0, s(12), 0, 0)
 ToggleLabel.BackgroundTransparency = 1
 ToggleLabel.Text = "Stomp Nearest"
 ToggleLabel.Font = Enum.Font.GothamSemibold
-ToggleLabel.TextSize = s(12)
-ToggleLabel.TextColor3 = COL.Text
+ToggleLabel.TextSize = s(13)
+ToggleLabel.TextColor3 = Shared.StompNearestEnabled and COL.TextOn or COL.TextOff
 ToggleLabel.TextXAlignment = Enum.TextXAlignment.Left
-ToggleLabel.ZIndex = 5
-ToggleLabel.Parent = ToggleRow
 
-local TogglePill = Instance.new("TextButton")
-TogglePill.AutoButtonColor = false
-TogglePill.AnchorPoint = Vector2.new(1, 0.5)
-TogglePill.Position = UDim2.new(1, -s(8), 0.5, 0)
-TogglePill.Size = UDim2.new(0, TOGGLE_W, 0, TOGGLE_H)
-TogglePill.Font = Enum.Font.GothamBold
-TogglePill.TextSize = s(10)
-TogglePill.TextColor3 = COL.Text
-TogglePill.ZIndex = 6
-TogglePill.Parent = ToggleRow
-corner(TogglePill, s(999))
+local ToggleBg = Instance.new("Frame", ToggleRow)
+ToggleBg.Size = UDim2.new(0, s(40), 0, s(20))
+ToggleBg.Position = UDim2.new(1, -s(50), 0.5, -s(10))
+ToggleBg.BackgroundColor3 = Shared.StompNearestEnabled and COL.ToggleBgOn or COL.ToggleBgOff
+Instance.new("UICorner", ToggleBg).CornerRadius = UDim.new(1, 0)
 
-local function updateToggle()
-    local on = Shared.StompNearestEnabled
-    TogglePill.BackgroundColor3 = on and COL.ToggleOn or COL.ToggleOff
-    TogglePill.Text = on and "ON" or "OFF"
-end
-updateToggle()
+local ToggleDot = Instance.new("Frame", ToggleBg)
+ToggleDot.Size = UDim2.new(0, s(14), 0, s(14))
+ToggleDot.Position = Shared.StompNearestEnabled and UDim2.new(0, s(23), 0.5, -s(7)) or UDim2.new(0, s(3), 0.5, -s(7))
+ToggleDot.BackgroundColor3 = COL.Dot
+Instance.new("UICorner", ToggleDot).CornerRadius = UDim.new(1, 0)
 
-TogglePill.MouseButton1Click:Connect(function()
+local ToggleBtn = Instance.new("TextButton", ToggleRow)
+ToggleBtn.Size = UDim2.new(1, 0, 1, 0)
+ToggleBtn.BackgroundTransparency = 1
+ToggleBtn.Text = ""
+
+ToggleBtn.MouseButton1Click:Connect(function()
     playClick()
     Shared.StompNearestEnabled = not Shared.StompNearestEnabled
-    updateToggle()
+    local st = Shared.StompNearestEnabled
+    TweenService:Create(ToggleDot, TweenInfo.new(0.2), {Position = st and UDim2.new(0, s(23), 0.5, -s(7)) or UDim2.new(0, s(3), 0.5, -s(7))}):Play()
+    TweenService:Create(ToggleBg, TweenInfo.new(0.2), {BackgroundColor3 = st and COL.ToggleBgOn or COL.ToggleBgOff}):Play()
+    TweenService:Create(ToggleLabel, TweenInfo.new(0.2), {TextColor3 = st and COL.TextOn or COL.TextOff}):Play()
     if Shared.SaveConfig then Shared.SaveConfig() end
 end)
 
-local SliderRow = Instance.new("Frame")
-SliderRow.Size = UDim2.new(1, 0, 0, sliderRowH)
-SliderRow.BackgroundColor3 = COL.Card
-SliderRow.BorderSizePixel = 0
-SliderRow.LayoutOrder = 1
-SliderRow.Parent = InnerContainer
-corner(SliderRow, s(8))
-strokeUI(SliderRow, COL.Stroke2, 1, 0.4)
+local SliderRow = Instance.new("Frame", InnerContainer)
+SliderRow.Size = UDim2.new(0.9, 0, 0, s(40))
+SliderRow.BackgroundColor3 = COL.RowBg
+SliderRow.LayoutOrder = 2
+Instance.new("UICorner", SliderRow).CornerRadius = UDim.new(0, s(6))
+Instance.new("UIStroke", SliderRow).Color = COL.RowStroke
 
-local RadiusLabel = Instance.new("TextLabel")
-RadiusLabel.Size = UDim2.new(1, -s(20), 0, s(18))
-RadiusLabel.Position = UDim2.new(0, s(12), 0, s(4))
+local RadiusLabel = Instance.new("TextLabel", SliderRow)
+RadiusLabel.Size = UDim2.new(1, -s(20), 0, s(20))
+RadiusLabel.Position = UDim2.new(0, s(12), 0, s(2))
 RadiusLabel.BackgroundTransparency = 1
-RadiusLabel.Text = string.format("Radius: %d", Shared.StompRadius)
+RadiusLabel.Text = "Radius: " .. tostring(Shared.StompRadius)
 RadiusLabel.Font = Enum.Font.GothamSemibold
-RadiusLabel.TextSize = s(11)
-RadiusLabel.TextColor3 = COL.Text
+RadiusLabel.TextSize = s(12)
+RadiusLabel.TextColor3 = COL.TextOn
 RadiusLabel.TextXAlignment = Enum.TextXAlignment.Left
-RadiusLabel.ZIndex = 5
-RadiusLabel.Parent = SliderRow
 
-local SliderBar = Instance.new("Frame")
-SliderBar.Size = UDim2.new(1, -s(24), 0, s(10))
-SliderBar.Position = UDim2.new(0, s(12), 0, s(28))
-SliderBar.BackgroundColor3 = COL.SliderBg
-SliderBar.Parent = SliderRow
-corner(SliderBar, s(5))
-strokeUI(SliderBar, COL.Stroke2, 1, 0.4)
+local SliderBar = Instance.new("Frame", SliderRow)
+SliderBar.Size = UDim2.new(1, -s(24), 0, s(6))
+SliderBar.Position = UDim2.new(0, s(12), 0, s(26))
+SliderBar.BackgroundColor3 = COL.ToggleBgOff
+Instance.new("UICorner", SliderBar).CornerRadius = UDim.new(1, 0)
 
-local SliderFill = Instance.new("Frame")
+local SliderFill = Instance.new("Frame", SliderBar)
 SliderFill.Size = UDim2.new(Shared.StompRadius / 50, 0, 1, 0)
-SliderFill.BackgroundColor3 = COL.SliderFill
-SliderFill.Parent = SliderBar
-corner(SliderFill, s(5))
+SliderFill.BackgroundColor3 = COL.ToggleBgOn
+Instance.new("UICorner", SliderFill).CornerRadius = UDim.new(1, 0)
 
-local SliderThumb = Instance.new("Frame")
-SliderThumb.Size = UDim2.new(0, s(16), 0, s(16))
-SliderThumb.Position = UDim2.new(Shared.StompRadius / 50, -s(8), 0.5, -s(8))
-SliderThumb.BackgroundColor3 = COL.SliderThumb
-SliderThumb.Parent = SliderBar
-corner(SliderThumb, s(999))
-strokeUI(SliderThumb, COL.ToggleOn, s(2), 0)
+local SliderThumb = Instance.new("Frame", SliderBar)
+SliderThumb.Size = UDim2.new(0, s(12), 0, s(12))
+SliderThumb.Position = UDim2.new(Shared.StompRadius / 50, -s(6), 0.5, -s(6))
+SliderThumb.BackgroundColor3 = COL.Dot
+Instance.new("UICorner", SliderThumb).CornerRadius = UDim.new(1, 0)
 
-local SliderHit = Instance.new("TextButton")
+local SliderHit = Instance.new("TextButton", SliderBar)
 SliderHit.BackgroundTransparency = 1
-SliderHit.AutoButtonColor = false
 SliderHit.Text = ""
 SliderHit.Size = UDim2.new(1, s(20), 1, s(20))
 SliderHit.Position = UDim2.new(0, -s(10), 0, -s(10))
-SliderHit.Parent = SliderBar
 
 local sliding = false
 
 local function setRadius(v)
     Shared.StompRadius = math.clamp(math.floor(v + 0.5), 0, 50)
-    RadiusLabel.Text = string.format("Radius: %d", Shared.StompRadius)
+    RadiusLabel.Text = "Radius: " .. tostring(Shared.StompRadius)
     local r = Shared.StompRadius / 50
     SliderFill.Size = UDim2.new(r, 0, 1, 0)
-    SliderThumb.Position = UDim2.new(r, -s(8), 0.5, -s(8))
+    SliderThumb.Position = UDim2.new(r, -s(6), 0.5, -s(6))
     if Shared.SaveConfig then Shared.SaveConfig() end
 end
 
@@ -485,7 +395,7 @@ table.insert(Shared.Connections[key], UserInputService.InputEnded:Connect(functi
 end))
 
 local dragging, dragInput, dragStart, startPos
-HeaderFrame.InputBegan:Connect(function(input)
+MainFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
         dragStart = input.Position
@@ -495,7 +405,7 @@ HeaderFrame.InputBegan:Connect(function(input)
         end)
     end
 end)
-HeaderFrame.InputChanged:Connect(function(input)
+MainFrame.InputChanged:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
         dragInput = input
     end
@@ -576,23 +486,18 @@ TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.Ea
 
 local function destroyAll()
     if Shared.Connections[key] then
-        for _, c in pairs(Shared.Connections[key]) do
-            pcall(function() c:Disconnect() end)
-        end
+        for _, c in pairs(Shared.Connections[key]) do pcall(function() c:Disconnect() end) end
         Shared.Connections[key] = {}
     end
-    if InstantStompGui then
-        pcall(function() InstantStompGui:Destroy() end)
-    end
+    if InstantStompGui then pcall(function() InstantStompGui:Destroy() end) end
     local rf = Workspace:FindFirstChild("Schmeckt_InstantStomp_Ring")
-    if rf then
-        pcall(function() rf:Destroy() end)
-    end
+    if rf then pcall(function() rf:Destroy() end) end
 end
 
 Shared.InstantStomp_Destroy = destroyAll
 
-local cleanupListener = RunService.RenderStepped:Connect(function()
+local cleanupListener
+cleanupListener = RunService.RenderStepped:Connect(function()
     if not Shared.InstantStomp then
         destroyAll()
         cleanupListener:Disconnect()
